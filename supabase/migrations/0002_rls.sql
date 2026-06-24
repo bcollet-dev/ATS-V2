@@ -2,23 +2,38 @@
 -- Helpers RLS
 -- ============================================================
 create or replace function current_user_role()
-returns app_role as $$
+returns app_role
+language sql
+stable
+security definer
+set search_path = public
+as $$
   select role from profiles
   where id = auth.uid() and active = true and deleted_at is null
-$$ language sql stable security definer;
+$$;
 
 create or replace function is_ats_user()
-returns boolean as $$
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
   select exists (
     select 1 from profiles
     where id = auth.uid() and active = true and deleted_at is null
   )
-$$ language sql stable security definer;
+$$;
 
 create or replace function is_ats_manager()
-returns boolean as $$
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
   select current_user_role() in ('admin', 'direction', 'team_leader')
-$$ language sql stable security definer;
+$$;
 
 -- ============================================================
 -- RLS: profiles
