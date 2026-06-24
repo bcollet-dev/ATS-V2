@@ -1,0 +1,77 @@
+import { pgEnum } from "drizzle-orm/pg-core";
+
+export const appRole = pgEnum("app_role", [
+  "admin",
+  "direction",
+  "team_leader",
+  "admissions",
+  "relations_entreprises",
+]);
+
+export const candidateStatus = pgEnum("candidate_status", [
+  "to_call",
+  "in_progress",
+  "no_response",
+  "interview",
+  "pvpp",
+  "admissible",
+  "company_interview",
+  "waiting_fre",
+  "placed",
+  "temporary_refusal",
+  "definitive_refusal",
+  "contract_break",
+]);
+
+export const needStatus = pgEnum("need_status", [
+  "ad_chase",
+  "prospect",
+  "need_in_progress",
+  "interview",
+  "waiting_fre",
+  "client",
+  "rupture",
+]);
+
+export const propositionStatus = pgEnum("proposition_status", [
+  "cv_sent",
+  "interview",
+  "waiting_fre",
+  "placed",
+  "not_retained",
+]);
+
+export const documentType = pgEnum("document_type", [
+  "cv",
+  "cni",
+  "carte_vitale",
+  "fre",
+  "diplome",
+  "other",
+]);
+
+export const taskCategory = pgEnum("task_category", [
+  "call",
+  "video_interview",
+  "onsite_interview",
+  "follow_up",
+  "document",
+  "email",
+  "administrative",
+  "other",
+]);
+
+export const ypareoExchangeStatus = pgEnum("ypareo_exchange_status", [
+  "success",
+  "error",
+  "pending",
+  "retryable",
+  "not_retryable",
+]);
+
+export const mailAudience = pgEnum("mail_audience", [
+  "candidate",
+  "company",
+  "need",
+  "all",
+]);

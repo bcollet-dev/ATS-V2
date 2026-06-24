@@ -1,0 +1,58 @@
+import {
+  pgTable,
+  uuid,
+  text,
+  integer,
+  timestamp,
+  date,
+  check,
+  index,
+} from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { needStatus } from "./enums";
+import { profiles } from "./profiles";
+import { companies } from "./companies";
+import { companyContacts } from "./companies";
+import { cursus } from "./ypareo";
+
+export const needs = pgTable(
+  "needs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+
+    companyId: uuid("company_id")
+      .notNull()
+      .references(() => companies.id, { onDelete: "restrict" }),
+    contactId: uuid("contact_id").references(() => companyContacts.id, { onDelete: "set null" }),
+
+    title: text("title").notNull(),
+    missions: text("missions"),
+    requirements: text("requirements"),
+
+    targetCursusId: uuid("target_cursus_id").references(() => cursus.id, { onDelete: "set null" }),
+    city: text("city"),
+    startDate: date("start_date"),
+    positionsCount: integer("positions_count").notNull().default(1),
+
+    // Statut pipeline (mis à jour automatiquement par trigger post-matching)
+    status: needStatus("status").notNull().default("ad_chase"),
+
+    ownerId: uuid("owner_id").references(() => profiles.id, { onDelete: "set null" }),
+    lostReason: text("lost_reason"),
+    notes: text("notes"),
+
+    ypareoNeedId: text("ypareo_need_id"),
+
+    createdBy: uuid("created_by").references(() => profiles.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (t) => [
+    check("needs_positions_count_check", sql`${t.positionsCount} > 0`),
+    index("needs_status_idx").on(t.status),
+    index("needs_company_idx").on(t.companyId),
+    index("needs_owner_idx").on(t.ownerId),
+    index("needs_deleted_at_idx").on(t.deletedAt),
+  ]
+);
