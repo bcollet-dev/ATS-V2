@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { z } from "zod";
 
 const loginSchema = z.object({
@@ -31,6 +32,22 @@ export async function signIn(formData: FormData) {
   }
 
   redirect("/dashboard");
+}
+
+export async function signInWithGoogle() {
+  const supabase = await createClient();
+  const headersList = await headers();
+  const origin = headersList.get("origin") ?? "http://localhost:3000";
+
+  const { data } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: `${origin}/auth/callback`,
+    },
+  });
+
+  if (data.url) redirect(data.url);
+  redirect("/login?error=oauth");
 }
 
 export async function signOut() {

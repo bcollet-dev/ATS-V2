@@ -1,5 +1,6 @@
 export * from "./enums";
 export * from "./profiles";
+export * from "./allowed-emails";
 export * from "./candidates";
 export * from "./companies";
 export * from "./ypareo";
