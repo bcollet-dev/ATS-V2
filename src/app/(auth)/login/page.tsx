@@ -71,9 +71,11 @@ export default async function LoginPage({
 
               {error && (
                 <p className="text-sm text-destructive text-center">
-                  {error === "oauth"
-                    ? "Connexion Google échouée. Vérifiez que votre adresse @eda-rh.fr est autorisée."
-                    : "Email ou mot de passe incorrect"}
+                  {error === "unauthorized"
+                    ? "Accès non autorisé. Contactez votre administrateur."
+                    : error === "oauth"
+                    ? "Une erreur est survenue. Réessayez ou contactez l'administrateur."
+                    : "Email ou mot de passe incorrect."}
                 </p>
               )}
               <Button type="submit" className="w-full">
