@@ -1,4 +1,4 @@
-import { signIn, signInWithGoogle } from "./actions";
+import { signIn } from "./actions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,13 +27,13 @@ export default async function LoginPage({
             <CardDescription>Accès réservé aux membres de l'équipe EDA Groupe</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Google OAuth */}
-            <form action={signInWithGoogle}>
-              <Button type="submit" variant="outline" className="w-full gap-2">
+            {/* Google OAuth — Route Handler GET pour redirect externe */}
+            <a href="/auth/google" className="block w-full">
+              <Button variant="outline" className="w-full gap-2">
                 <GoogleIcon />
                 Continuer avec Google
               </Button>
-            </form>
+            </a>
 
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
