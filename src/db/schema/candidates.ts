@@ -50,6 +50,9 @@ export const candidates = pgTable(
     professionalExperiences: text("professional_experiences"),
     previousTrainings: text("previous_trainings"),
 
+    // Parcours souhaité
+    cursusEnvisage: text("cursus_envisage"),
+
     // Suivi recrutement
     source: text("source"),
     ownerId: uuid("owner_id").references(() => profiles.id, { onDelete: "set null" }),
