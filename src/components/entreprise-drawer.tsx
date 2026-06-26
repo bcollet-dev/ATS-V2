@@ -16,11 +16,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { createEntreprise } from "@/app/(app)/annuaire/create-actions";
 import {
-  createEntreprise,
   createEntrepriseSchema,
   type CreateEntrepriseInput,
-} from "@/app/(app)/annuaire/create-actions";
+} from "@/app/(app)/annuaire/schemas";
 
 interface EntrepriseDrawerProps {
   open: boolean;

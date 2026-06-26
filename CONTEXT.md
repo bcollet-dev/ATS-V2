@@ -11,7 +11,7 @@ Personne qui postule à une formation en alternance ou apprentissage chez EDA Gr
 _Avoid_ : Lead (terme générique), apprenant (terme Ypareo réservé au candidat après signature du contrat), étudiant
 
 **Entreprise** :
-Structure employeuse partenaire d'EDA Groupe susceptible d'accueillir un candidat en alternance. Identifiée de manière unique par son SIREN.
+Structure employeuse partenaire d'EDA Groupe susceptible d'accueillir un candidat en alternance. Identifiée de manière unique par son SIRET (14 chiffres — on suit l'établissement précis, pas seulement l'entité juridique SIREN).
 _Avoid_ : Client (réservé au statut final du pipeline besoin), société, organisme
 
 **Contact** :
