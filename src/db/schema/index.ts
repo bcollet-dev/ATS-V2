@@ -12,3 +12,6 @@ export * from "./notifications";
 export * from "./mail";
 export * from "./dashboard";
 export * from "./audit";
+export * from "./candidate-experiences";
+export * from "./candidate-formations";
+export * from "./candidate-skills";

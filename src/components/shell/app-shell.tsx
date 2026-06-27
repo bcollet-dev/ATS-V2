@@ -15,6 +15,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { signOut } from "@/app/(auth)/login/actions";
+import { NotificationBell } from "./NotificationBell";
 import type { profiles } from "@/db/schema";
 import type { InferSelectModel } from "drizzle-orm";
 
@@ -30,9 +31,11 @@ const ROLE_LABELS: Record<Profile["role"], string> = {
 
 export function AppShell({
   user,
+  unreadCount,
   children,
 }: {
   user: Profile;
+  unreadCount: number;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -107,8 +110,9 @@ export function AppShell({
 
         {/* User footer */}
         <div className="border-t p-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm hover:bg-sidebar-accent/50 transition-colors">
+          <div className="flex items-center gap-1 mb-1">
+            <DropdownMenu>
+            <DropdownMenuTrigger className="flex flex-1 min-w-0 items-center gap-2.5 rounded-md px-2.5 py-2 text-sm hover:bg-sidebar-accent/50 transition-colors">
               <Avatar className="h-6 w-6">
                 <AvatarFallback className="text-xs bg-[var(--color-eda-rh)] text-white">
                   {initials}
@@ -135,6 +139,8 @@ export function AppShell({
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+            <NotificationBell unreadCount={unreadCount} />
+          </div>
         </div>
       </aside>
 

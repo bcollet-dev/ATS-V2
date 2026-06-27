@@ -39,16 +39,15 @@ export const candidates = pgTable(
     // Données personnelles sensibles
     birthDate: date("birth_date"),
     birthCity: text("birth_city"),
+    birthDepartment: text("birth_department"),
     birthCountry: text("birth_country"),
+    nationality: text("nationality"),
     nirEncrypted: bytea("nir_encrypted"),
     nirIv: bytea("nir_iv"),
     rqth: boolean("rqth").notNull().default(false),
 
     // Parcours
-    previousSituationLevel: text("previous_situation_level"),
-    skills: text("skills").array(),
-    professionalExperiences: text("professional_experiences"),
-    previousTrainings: text("previous_trainings"),
+    socialRegime: text("social_regime"),
 
     // Parcours souhaité
     cursusEnvisage: text("cursus_envisage"),
@@ -62,6 +61,13 @@ export const candidates = pgTable(
 
     // Statut pipeline (mis à jour automatiquement par trigger post-admissible)
     status: candidateStatus("status").notNull().default("to_call"),
+
+    // Représentant légal
+    legalRepFirstName: text("legal_rep_first_name"),
+    legalRepLastName: text("legal_rep_last_name"),
+    legalRepLink: text("legal_rep_link"),
+    legalRepPhone: text("legal_rep_phone"),
+    legalRepEmail: text("legal_rep_email"),
 
     // Ypareo
     ypareoPersonId: text("ypareo_person_id"),

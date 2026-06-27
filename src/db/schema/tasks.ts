@@ -18,7 +18,6 @@ export const tasks = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
 
-    // Au moins une entité référencée
     candidateId: uuid("candidate_id").references(() => candidates.id, { onDelete: "cascade" }),
     companyId: uuid("company_id").references(() => companies.id, { onDelete: "cascade" }),
     needId: uuid("need_id").references(() => needs.id, { onDelete: "cascade" }),
@@ -27,8 +26,9 @@ export const tasks = pgTable(
     description: text("description"),
     category: taskCategory("category").notNull().default("follow_up"),
 
-    dueAt: timestamp("due_at", { withTimezone: true }),
+    dueAt: timestamp("due_at", { withTimezone: true }).notNull(),
     completedAt: timestamp("completed_at", { withTimezone: true }),
+    completedBy: uuid("completed_by").references(() => profiles.id, { onDelete: "set null" }),
 
     assignedTo: uuid("assigned_to").references(() => profiles.id, { onDelete: "set null" }),
     createdBy: uuid("created_by").references(() => profiles.id, { onDelete: "set null" }),

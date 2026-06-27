@@ -52,13 +52,14 @@ export const documentType = pgEnum("document_type", [
 
 export const taskCategory = pgEnum("task_category", [
   "call",
+  "email",
+  "document",
+  "follow_up",
+  "interview",
+  "other",
   "video_interview",
   "onsite_interview",
-  "follow_up",
-  "document",
-  "email",
   "administrative",
-  "other",
 ]);
 
 export const ypareoExchangeStatus = pgEnum("ypareo_exchange_status", [

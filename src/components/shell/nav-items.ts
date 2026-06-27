@@ -44,11 +44,6 @@ export const navItems = [
     icon: ListTodo,
   },
   {
-    label: "Historique",
-    href: "/historique",
-    icon: History,
-  },
-  {
     label: "Cursus",
     href: "/cursus",
     icon: RefreshCw,
@@ -61,6 +56,11 @@ export const navItems = [
 ] as const;
 
 export const adminNavItems = [
+  {
+    label: "Historique",
+    href: "/historique",
+    icon: History,
+  },
   {
     label: "Utilisateurs",
     href: "/utilisateurs",
