@@ -40,9 +40,12 @@ export async function searchAnnuaire(
   query: string,
   types: FilterType[]
 ): Promise<SearchResult[]> {
-  if (query.trim().length < 2 || types.length === 0) return [];
+  if (types.length === 0) return [];
 
-  const q = `%${query.trim()}%`;
+  const trimmed = query.trim();
+  const isFiltered = trimmed.length >= 2;
+  const q = `%${trimmed}%`;
+  const limit = isFiltered ? 15 : 50;
 
   const [candidatsRows, contactsRows, entreprisesRows] = await Promise.all([
     types.includes("candidat")
@@ -56,18 +59,20 @@ export async function searchAnnuaire(
           })
           .from(candidates)
           .where(
-            and(
-              isNull(candidates.deletedAt),
-              or(
-                ilike(candidates.firstName, q),
-                ilike(candidates.lastName, q),
-                ilike(candidates.email, q),
-                ilike(candidates.phone, q),
-                ilike(candidates.cursusEnvisage, q)
-              )
-            )
+            isFiltered
+              ? and(
+                  isNull(candidates.deletedAt),
+                  or(
+                    ilike(candidates.firstName, q),
+                    ilike(candidates.lastName, q),
+                    ilike(candidates.email, q),
+                    ilike(candidates.phone, q),
+                    ilike(candidates.cursusEnvisage, q)
+                  )
+                )
+              : isNull(candidates.deletedAt)
           )
-          .limit(15)
+          .limit(limit)
       : Promise.resolve([]),
 
     types.includes("contact")
@@ -84,18 +89,20 @@ export async function searchAnnuaire(
           .from(companyContacts)
           .innerJoin(companies, eq(companyContacts.companyId, companies.id))
           .where(
-            and(
-              isNull(companyContacts.deletedAt),
-              isNull(companies.deletedAt),
-              or(
-                ilike(companyContacts.firstName, q),
-                ilike(companyContacts.lastName, q),
-                ilike(companyContacts.email, q),
-                ilike(companyContacts.phone, q)
-              )
-            )
+            isFiltered
+              ? and(
+                  isNull(companyContacts.deletedAt),
+                  isNull(companies.deletedAt),
+                  or(
+                    ilike(companyContacts.firstName, q),
+                    ilike(companyContacts.lastName, q),
+                    ilike(companyContacts.email, q),
+                    ilike(companyContacts.phone, q)
+                  )
+                )
+              : and(isNull(companyContacts.deletedAt), isNull(companies.deletedAt))
           )
-          .limit(15)
+          .limit(limit)
       : Promise.resolve([]),
 
     types.includes("entreprise")
@@ -108,16 +115,18 @@ export async function searchAnnuaire(
           })
           .from(companies)
           .where(
-            and(
-              isNull(companies.deletedAt),
-              or(
-                ilike(companies.name, q),
-                ilike(companies.siret, q),
-                ilike(companies.city, q)
-              )
-            )
+            isFiltered
+              ? and(
+                  isNull(companies.deletedAt),
+                  or(
+                    ilike(companies.name, q),
+                    ilike(companies.siret, q),
+                    ilike(companies.city, q)
+                  )
+                )
+              : isNull(companies.deletedAt)
           )
-          .limit(15)
+          .limit(limit)
       : Promise.resolve([]),
   ]);
 

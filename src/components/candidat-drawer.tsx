@@ -1,6 +1,6 @@
 "use client";
 
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTransition } from "react";
 import { toast } from "sonner";
@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 import { createCandidat } from "@/app/(app)/annuaire/create-actions";
 import {
   createCandidatSchema,
@@ -26,9 +27,10 @@ interface CandidatDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCreated?: (id: string) => void;
+  cursus: { id: string; name: string }[];
 }
 
-export function CandidatDrawer({ open, onOpenChange, onCreated }: CandidatDrawerProps) {
+export function CandidatDrawer({ open, onOpenChange, onCreated, cursus }: CandidatDrawerProps) {
   const [isPending, startTransition] = useTransition();
 
   const {
@@ -36,6 +38,7 @@ export function CandidatDrawer({ open, onOpenChange, onCreated }: CandidatDrawer
     handleSubmit,
     setError,
     reset,
+    control,
     formState: { errors },
   } = useForm<CreateCandidatInput>({
     resolver: zodResolver(createCandidatSchema),
@@ -100,7 +103,29 @@ export function CandidatDrawer({ open, onOpenChange, onCreated }: CandidatDrawer
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="cursusEnvisage">Cursus envisagé</Label>
-              <Input id="cursusEnvisage" {...register("cursusEnvisage")} />
+              <Controller
+                name="cursusEnvisage"
+                control={control}
+                render={({ field }) => (
+                  <select
+                    {...field}
+                    id="cursusEnvisage"
+                    className={cn(
+                      "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs",
+                      "focus:outline-none focus:ring-1 focus:ring-ring",
+                      "disabled:cursor-not-allowed disabled:opacity-50",
+                      !field.value && "text-muted-foreground"
+                    )}
+                  >
+                    <option value="">— Choisir un cursus —</option>
+                    {cursus.map((c) => (
+                      <option key={c.id} value={c.name}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              />
               {errors.cursusEnvisage && (
                 <p className="text-xs text-destructive">{errors.cursusEnvisage.message}</p>
               )}

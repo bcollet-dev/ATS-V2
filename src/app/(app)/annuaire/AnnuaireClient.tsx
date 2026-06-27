@@ -29,7 +29,7 @@ const TYPE_ROUTES = {
   entreprise: "/entreprises",
 } as const;
 
-export function AnnuaireClient() {
+export function AnnuaireClient({ cursus }: { cursus: { id: string; name: string }[] }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [activeFilters, setActiveFilters] = useState<FilterType[]>([
@@ -39,23 +39,22 @@ export function AnnuaireClient() {
   ]);
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isPending, startTransition] = useTransition();
-  const [hasSearched, setHasSearched] = useState(false);
   const [candidatDrawerOpen, setCandidatDrawerOpen] = useState(false);
   const [entrepriseDrawerOpen, setEntrepriseDrawerOpen] = useState(false);
 
   useEffect(() => {
-    if (query.trim().length < 2) {
-      setResults([]);
-      setHasSearched(false);
-      return;
-    }
+    const trimmed = query.trim();
+    // Pour une query courte (1 char) on attend 2 chars avant de filtrer,
+    // mais on ne bloque pas l'affichage initial (query vide = tout afficher).
+    if (trimmed.length === 1) return;
+
+    const delay = trimmed.length === 0 ? 0 : 300;
     const timer = setTimeout(() => {
-      setHasSearched(true);
       startTransition(async () => {
         const data = await searchAnnuaire(query, activeFilters);
         setResults(data);
       });
-    }, 300);
+    }, delay);
     return () => clearTimeout(timer);
   }, [query, activeFilters]);
 
@@ -77,6 +76,7 @@ export function AnnuaireClient() {
       open={candidatDrawerOpen}
       onOpenChange={setCandidatDrawerOpen}
       onCreated={(id) => router.push(`/candidats/${id}`)}
+      cursus={cursus}
     />
     <EntrepriseDrawer
       open={entrepriseDrawerOpen}
@@ -145,7 +145,7 @@ export function AnnuaireClient() {
 
       {/* Résultats */}
       <div className={cn("space-y-2 transition-opacity", isPending && "opacity-50")}>
-        {hasSearched && results.length === 0 && !isPending && (
+        {results.length === 0 && !isPending && query.trim().length >= 2 && (
           <p className="text-sm text-muted-foreground text-center py-8">
             Aucun résultat pour «&nbsp;{query}&nbsp;»
           </p>

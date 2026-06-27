@@ -19,7 +19,7 @@ export const cursus = pgTable(
   "cursus",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    externalId: text("external_id").notNull(),
+    externalId: text("external_id"),
     code: text("code"),
     name: text("name").notNull(),
     description: text("description"),
@@ -41,7 +41,7 @@ export const classes = pgTable(
     cursusId: uuid("cursus_id")
       .notNull()
       .references(() => cursus.id, { onDelete: "cascade" }),
-    externalId: text("external_id").notNull(),
+    externalId: text("external_id"),
     code: text("code"),
     name: text("name").notNull(),
     site: text("site"),
