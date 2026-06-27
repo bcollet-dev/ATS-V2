@@ -11,6 +11,7 @@ export type CandidatResult = {
   id: string;
   firstName: string;
   lastName: string;
+  email: string | null;
   phone: string | null;
   cursusEnvisage: string | null;
 };
@@ -21,6 +22,7 @@ export type ContactResult = {
   firstName: string;
   lastName: string;
   jobTitle: string | null;
+  email: string | null;
   phone: string | null;
   companyId: string;
   companyName: string;
@@ -54,6 +56,7 @@ export async function searchAnnuaire(
             id: candidates.id,
             firstName: candidates.firstName,
             lastName: candidates.lastName,
+            email: candidates.email,
             phone: candidates.phone,
             cursusEnvisage: candidates.cursusEnvisage,
           })
@@ -82,6 +85,7 @@ export async function searchAnnuaire(
             firstName: companyContacts.firstName,
             lastName: companyContacts.lastName,
             jobTitle: companyContacts.jobTitle,
+            email: companyContacts.email,
             phone: companyContacts.phone,
             companyId: companyContacts.companyId,
             companyName: companies.name,

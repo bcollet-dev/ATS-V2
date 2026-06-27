@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Users, Building2, BookUser, Phone, GraduationCap, MapPin, Hash, UserPlus, PlusCircle } from "lucide-react";
+import { Search, Users, Building2, BookUser, Phone, Mail, GraduationCap, MapPin, Hash, UserPlus, PlusCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -205,6 +205,12 @@ function ResultCard({
                   {result.phone}
                 </span>
               )}
+              {result.email && (
+                <span className="flex items-center gap-1">
+                  <Mail className="h-3 w-3" />
+                  {result.email}
+                </span>
+              )}
               {result.cursusEnvisage && (
                 <span className="flex items-center gap-1">
                   <GraduationCap className="h-3 w-3" />
@@ -225,6 +231,12 @@ function ResultCard({
                 <span className="flex items-center gap-1">
                   <Phone className="h-3 w-3" />
                   {result.phone}
+                </span>
+              )}
+              {result.email && (
+                <span className="flex items-center gap-1">
+                  <Mail className="h-3 w-3" />
+                  {result.email}
                 </span>
               )}
             </>
