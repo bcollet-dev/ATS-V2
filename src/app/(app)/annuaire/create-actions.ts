@@ -9,6 +9,7 @@ import {
   type CreateCandidatInput,
   type CreateEntrepriseInput,
 } from "./schemas";
+import type { RegistryData } from "./siret-actions";
 
 type ActionResult<T> =
   | { success: true; data: T }
@@ -48,7 +49,8 @@ export async function createCandidat(
 // ─── Entreprise ───────────────────────────────────────────────────────────────
 
 export async function createEntreprise(
-  input: CreateEntrepriseInput
+  input: CreateEntrepriseInput,
+  registry?: RegistryData | null
 ): Promise<ActionResult<{ id: string; name: string }>> {
   const parsed = createEntrepriseSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: "Données invalides" };
@@ -69,7 +71,21 @@ export async function createEntreprise(
 
   const [created] = await db
     .insert(companies)
-    .values({ name, siret })
+    .values({
+      name,
+      siret,
+      ...(registry && {
+        siren: registry.siren || null,
+        address: registry.address,
+        postalCode: registry.postalCode,
+        city: registry.city,
+        nafCode: registry.nafCode,
+        legalForm: registry.legalForm,
+        employeeRange: registry.employeeRange,
+        administrativeStatus: registry.administrativeStatus,
+        registrySyncedAt: new Date(),
+      }),
+    })
     .returning({ id: companies.id, name: companies.name });
 
   await db.insert(companyContacts).values({

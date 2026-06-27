@@ -35,6 +35,11 @@ export function CursusDrawer({ open, onOpenChange }: CursusDrawerProps) {
     formState: { errors },
   } = useForm<CreateCursusInput>({
     resolver: zodResolver(createCursusSchema),
+    defaultValues: {
+      name: "",
+      code: "",
+      description: "",
+    },
   });
 
   function onSubmit(data: CreateCursusInput) {

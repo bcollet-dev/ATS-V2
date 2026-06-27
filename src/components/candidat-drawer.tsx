@@ -42,6 +42,13 @@ export function CandidatDrawer({ open, onOpenChange, onCreated, cursus }: Candid
     formState: { errors },
   } = useForm<CreateCandidatInput>({
     resolver: zodResolver(createCandidatSchema),
+    defaultValues: {
+      firstName: "",
+      lastName: "",
+      phone: "",
+      email: "",
+      cursusEnvisage: "",
+    },
   });
 
   function onSubmit(data: CreateCandidatInput) {
