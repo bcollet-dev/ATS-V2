@@ -9,8 +9,10 @@ import { CandidatDrawer } from "@/components/candidat-drawer";
 import { updateCandidateStatus, type CandidatRow } from "./actions";
 import { KanbanPipeline } from "./KanbanPipeline";
 import { PipelineList } from "./PipelineList";
+import { RefusModal } from "./RefusModal";
 
 const ARCHIVED = new Set(["temporary_refusal", "definitive_refusal"]);
+type RefusType = "temporary_refusal" | "definitive_refusal";
 type ViewMode = "kanban" | "list";
 type Tab = "pipeline" | "archives";
 
@@ -25,6 +27,7 @@ export function PipelineClient({
   const [tab, setTab] = useState<Tab>("pipeline");
   const [view, setView] = useState<ViewMode>("kanban");
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [refusPending, setRefusPending] = useState<{ id: string; status: RefusType } | null>(null);
   const [, startTransition] = useTransition();
 
   const [candidates, setOptimistic] = useOptimistic(
@@ -36,10 +39,31 @@ export function PipelineClient({
   const pipeline = candidates.filter((c) => !ARCHIVED.has(c.status));
   const archives = candidates.filter((c) => ARCHIVED.has(c.status));
 
+  const refusCandidat = refusPending
+    ? candidates.find((c) => c.id === refusPending.id)
+    : null;
+  const refusCandidatName = refusCandidat
+    ? `${refusCandidat.firstName} ${refusCandidat.lastName}`
+    : "";
+
   function handleStatusChange(id: string, status: string) {
+    if (status === "temporary_refusal" || status === "definitive_refusal") {
+      setRefusPending({ id, status });
+      return;
+    }
     startTransition(async () => {
       setOptimistic({ id, status });
       await updateCandidateStatus(id, status);
+    });
+  }
+
+  function handleRefusConfirm(reason: string) {
+    if (!refusPending) return;
+    const { id, status } = refusPending;
+    setRefusPending(null);
+    startTransition(async () => {
+      setOptimistic({ id, status });
+      await updateCandidateStatus(id, status, reason);
     });
   }
 
@@ -136,6 +160,14 @@ export function PipelineClient({
         onOpenChange={setDrawerOpen}
         cursus={cursus}
         onCreated={(id) => router.push(`/candidats/${id}`)}
+      />
+
+      <RefusModal
+        open={!!refusPending}
+        refusType={refusPending?.status ?? null}
+        candidateName={refusCandidatName}
+        onConfirm={handleRefusConfirm}
+        onCancel={() => setRefusPending(null)}
       />
     </div>
   );

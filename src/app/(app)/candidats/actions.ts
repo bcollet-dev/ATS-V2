@@ -73,11 +73,15 @@ export async function loadPipelineCandidates(): Promise<CandidatRow[]> {
   }));
 }
 
-export async function updateCandidateStatus(id: string, status: string) {
+export async function updateCandidateStatus(id: string, status: string, lostReason?: string) {
   await requireAuth();
   await db
     .update(candidates)
-    .set({ status: status as never, updatedAt: new Date() })
+    .set({
+      status: status as never,
+      updatedAt: new Date(),
+      ...(lostReason !== undefined ? { lostReason } : {}),
+    })
     .where(eq(candidates.id, id));
   revalidatePath("/candidats");
 }
