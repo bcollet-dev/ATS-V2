@@ -1,8 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import Link from "next/link";
-import { ChevronUp, ChevronDown, MoreHorizontal } from "lucide-react";
+import {
+  ChevronUp, ChevronDown, MoreHorizontal,
+  SlidersHorizontal, Check, Search,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
@@ -59,12 +62,228 @@ const ACTIVE_STATUSES = [
 ];
 
 type SortKey = "name" | "status" | "cursus" | "owner" | "nextTask";
+type FilterKey = "status" | "cursus" | "owner";
 type SortDir = "asc" | "desc";
+
+function getColValue(c: CandidatRow, col: SortKey | FilterKey): string {
+  switch (col) {
+    case "name":    return `${c.firstName} ${c.lastName}`;
+    case "status":  return STATUS_LABELS[c.status] ?? c.status;
+    case "cursus":  return c.cursusEnvisage ?? "";
+    case "owner":   return c.ownerName ?? "";
+    case "nextTask":return c.nextTaskAt ?? "9999";
+  }
+}
 
 function formatDate(iso: string | null) {
   if (!iso) return null;
   return new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
 }
+
+// ─── Filter Popover ──────────────────────────────────────────────────────────
+
+function FilterPopover({
+  col,
+  allValues,
+  selected,
+  onSelect,
+  sort,
+  onSort,
+  onClose,
+}: {
+  col: FilterKey;
+  allValues: string[];
+  selected: Set<string> | null;
+  onSelect: (v: Set<string> | null) => void;
+  sort: { key: SortKey; dir: SortDir } | null;
+  onSort: (key: SortKey, dir: SortDir) => void;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [search, setSearch] = useState("");
+  const allSelected = selected === null;
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [onClose]);
+
+  const visibleValues = search.trim()
+    ? allValues.filter((v) => v.toLowerCase().includes(search.toLowerCase()))
+    : allValues;
+
+  function toggle(value: string) {
+    const base = selected ?? new Set(allValues);
+    const next = new Set(base);
+    if (next.has(value)) next.delete(value);
+    else next.add(value);
+    onSelect(next);
+  }
+
+  const activeSort = sort?.key === col ? sort.dir : null;
+
+  return (
+    <div
+      ref={ref}
+      className="absolute top-full left-0 z-50 mt-1 w-52 rounded-lg border bg-popover shadow-lg overflow-hidden"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="border-b">
+        <button
+          onClick={() => { onSort(col, "asc"); onClose(); }}
+          className={cn("flex items-center gap-2 w-full px-3 py-2 text-xs hover:bg-accent transition-colors", activeSort === "asc" && "text-primary font-medium")}
+        >
+          <ChevronUp className="h-3.5 w-3.5" />
+          Trier A → Z
+          {activeSort === "asc" && <Check className="h-3 w-3 ml-auto" />}
+        </button>
+        <button
+          onClick={() => { onSort(col, "desc"); onClose(); }}
+          className={cn("flex items-center gap-2 w-full px-3 py-2 text-xs hover:bg-accent transition-colors", activeSort === "desc" && "text-primary font-medium")}
+        >
+          <ChevronDown className="h-3.5 w-3.5" />
+          Trier Z → A
+          {activeSort === "desc" && <Check className="h-3 w-3 ml-auto" />}
+        </button>
+      </div>
+
+      <div className="px-2 py-2 border-b">
+        <div className="relative">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground pointer-events-none" />
+          <input
+            type="text"
+            placeholder="Rechercher…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full rounded border border-input bg-background pl-6 pr-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+            autoFocus
+          />
+        </div>
+      </div>
+
+      <div className="max-h-48 overflow-y-auto">
+        {!search && (
+          <button
+            onClick={() => onSelect(null)}
+            className={cn("flex items-center gap-2 w-full px-3 py-2 text-xs hover:bg-accent transition-colors border-b", allSelected && "text-primary font-medium")}
+          >
+            <span className={cn("flex h-3.5 w-3.5 items-center justify-center rounded border shrink-0", allSelected ? "bg-primary border-primary" : "border-input")}>
+              {allSelected && <Check className="h-2.5 w-2.5 text-primary-foreground" />}
+            </span>
+            (Tout sélectionner)
+          </button>
+        )}
+        {visibleValues.length === 0 && (
+          <p className="px-3 py-3 text-xs text-muted-foreground text-center">Aucun résultat</p>
+        )}
+        {visibleValues.map((val) => {
+          const checked = allSelected || (selected?.has(val) ?? false);
+          return (
+            <button
+              key={val}
+              onClick={() => toggle(val)}
+              className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-accent transition-colors"
+            >
+              <span className={cn("flex h-3.5 w-3.5 items-center justify-center rounded border shrink-0", checked ? "bg-primary border-primary" : "border-input")}>
+                {checked && <Check className="h-2.5 w-2.5 text-primary-foreground" />}
+              </span>
+              <span className="truncate">{val || "—"}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── Column Header ───────────────────────────────────────────────────────────
+
+function ColHeader({
+  col,
+  label,
+  allValues,
+  filters,
+  onFilters,
+  sort,
+  onSort,
+}: {
+  col: FilterKey;
+  label: string;
+  allValues: string[];
+  filters: Map<FilterKey, Set<string> | null>;
+  onFilters: (col: FilterKey, values: Set<string> | null) => void;
+  sort: { key: SortKey; dir: SortDir } | null;
+  onSort: (key: SortKey, dir: SortDir) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = filters.has(col) ? filters.get(col)! : null;
+  const isFiltered = filters.has(col) && selected !== null;
+  const isSorted = sort?.key === col;
+
+  return (
+    <th className="px-4 py-2.5 text-left">
+      <div className="relative">
+        <button
+          onClick={() => setOpen((o) => !o)}
+          className={cn(
+            "flex items-center gap-1 text-xs font-medium transition-colors group",
+            isFiltered || isSorted ? "text-primary" : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          {label}
+          {isSorted && (sort?.dir === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />)}
+          <SlidersHorizontal className={cn("h-3 w-3 transition-opacity", isFiltered ? "opacity-100" : "opacity-0 group-hover:opacity-60")} />
+        </button>
+        {open && (
+          <FilterPopover
+            col={col}
+            allValues={allValues}
+            selected={selected}
+            onSelect={(v) => onFilters(col, v)}
+            sort={sort}
+            onSort={onSort}
+            onClose={() => setOpen(false)}
+          />
+        )}
+      </div>
+    </th>
+  );
+}
+
+// ─── Sort-only Header ────────────────────────────────────────────────────────
+
+function SortHeader({
+  col,
+  label,
+  sort,
+  onSort,
+}: {
+  col: SortKey;
+  label: string;
+  sort: { key: SortKey; dir: SortDir } | null;
+  onSort: (key: SortKey, dir: SortDir) => void;
+}) {
+  const active = sort?.key === col;
+  function toggle() {
+    onSort(col, active && sort?.dir === "asc" ? "desc" : "asc");
+  }
+  return (
+    <th className="px-4 py-2.5 text-left">
+      <button
+        onClick={toggle}
+        className={cn("flex items-center gap-1 text-xs font-medium transition-colors", active ? "text-primary" : "text-muted-foreground hover:text-foreground")}
+      >
+        {label}
+        {active && (sort?.dir === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />)}
+      </button>
+    </th>
+  );
+}
+
+// ─── Main Component ──────────────────────────────────────────────────────────
 
 export function PipelineList({
   candidates,
@@ -75,46 +294,51 @@ export function PipelineList({
   onStatusChange: (id: string, status: string) => void;
   archived?: boolean;
 }) {
-  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "name", dir: "asc" });
+  const [filters, setFilters] = useState<Map<FilterKey, Set<string> | null>>(new Map());
+  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir } | null>({ key: "name", dir: "asc" });
 
-  function toggleSort(key: SortKey) {
-    setSort((prev) =>
-      prev.key === key
-        ? { key, dir: prev.dir === "asc" ? "desc" : "asc" }
-        : { key, dir: "asc" }
-    );
+  function handleFilters(col: FilterKey, values: Set<string> | null) {
+    setFilters((prev) => {
+      const next = new Map(prev);
+      if (values === null) next.delete(col);
+      else next.set(col, values);
+      return next;
+    });
   }
 
-  const sorted = [...candidates].sort((a, b) => {
-    let va = "";
-    let vb = "";
-    switch (sort.key) {
-      case "name":     va = `${a.firstName} ${a.lastName}`; vb = `${b.firstName} ${b.lastName}`; break;
-      case "status":   va = STATUS_LABELS[a.status] ?? ""; vb = STATUS_LABELS[b.status] ?? ""; break;
-      case "cursus":   va = a.cursusEnvisage ?? ""; vb = b.cursusEnvisage ?? ""; break;
-      case "owner":    va = a.ownerName ?? ""; vb = b.ownerName ?? ""; break;
-      case "nextTask": va = a.nextTaskAt ?? "9999"; vb = b.nextTaskAt ?? "9999"; break;
+  function handleSort(key: SortKey, dir: SortDir) {
+    setSort({ key, dir });
+  }
+
+  const allValues = useMemo(() => {
+    const cols: FilterKey[] = ["status", "cursus", "owner"];
+    const map = new Map<FilterKey, string[]>();
+    for (const col of cols) {
+      const vals = [...new Set(candidates.map((c) => getColValue(c, col)).filter(Boolean))].sort();
+      map.set(col, vals);
     }
-    return sort.dir === "asc" ? va.localeCompare(vb) : vb.localeCompare(va);
-  });
+    return map;
+  }, [candidates]);
 
-  function SortHeader({ col, label }: { col: SortKey; label: string }) {
-    const active = sort.key === col;
-    return (
-      <button
-        onClick={() => toggleSort(col)}
-        className={cn(
-          "flex items-center gap-1 text-xs font-medium transition-colors",
-          active ? "text-primary" : "text-muted-foreground hover:text-foreground"
-        )}
-      >
-        {label}
-        {active && (sort.dir === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />)}
-      </button>
-    );
-  }
+  const processed = useMemo(() => {
+    let result = candidates;
+    for (const [col, values] of filters.entries()) {
+      if (values === null) continue;
+      result = result.filter((c) => values.has(getColValue(c, col)));
+    }
+    if (sort) {
+      result = [...result].sort((a, b) => {
+        const va = getColValue(a, sort.key);
+        const vb = getColValue(b, sort.key);
+        return sort.dir === "asc" ? va.localeCompare(vb) : vb.localeCompare(va);
+      });
+    }
+    return result;
+  }, [candidates, filters, sort]);
 
-  if (sorted.length === 0) {
+  const activeFilterCount = [...filters.values()].filter((s) => s !== null).length;
+
+  if (candidates.length === 0) {
     return (
       <div className="px-6 py-16 text-center">
         <p className="text-sm text-muted-foreground">Aucun candidat</p>
@@ -123,21 +347,38 @@ export function PipelineList({
   }
 
   return (
-    <div className="px-6 py-4">
-      <div className="rounded-lg border overflow-hidden">
+    <div className="px-6 py-4 space-y-2">
+      {activeFilterCount > 0 && (
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">
+            {processed.length} / {candidates.length} candidat{candidates.length !== 1 ? "s" : ""}
+          </span>
+          <button onClick={() => setFilters(new Map())} className="text-xs text-primary hover:underline">
+            Effacer les filtres ({activeFilterCount})
+          </button>
+        </div>
+      )}
+
+      <div className="rounded-lg border overflow-visible">
         <table className="w-full text-sm">
           <thead className="bg-muted/40 border-b">
             <tr>
-              <th className="px-4 py-2.5 text-left"><SortHeader col="name" label="Candidat" /></th>
-              <th className="px-4 py-2.5 text-left"><SortHeader col="status" label="Étape" /></th>
-              <th className="px-4 py-2.5 text-left"><SortHeader col="cursus" label="Cursus" /></th>
-              <th className="px-4 py-2.5 text-left"><SortHeader col="owner" label="Recruteur" /></th>
-              <th className="px-4 py-2.5 text-left"><SortHeader col="nextTask" label="Prochaine tâche" /></th>
+              <SortHeader col="name"     label="Candidat"        sort={sort} onSort={handleSort} />
+              <ColHeader  col="status"   label="Étape"           allValues={allValues.get("status") ?? []}  filters={filters} onFilters={handleFilters} sort={sort} onSort={handleSort} />
+              <ColHeader  col="cursus"   label="Cursus"          allValues={allValues.get("cursus") ?? []}  filters={filters} onFilters={handleFilters} sort={sort} onSort={handleSort} />
+              <ColHeader  col="owner"    label="Recruteur"       allValues={allValues.get("owner") ?? []}   filters={filters} onFilters={handleFilters} sort={sort} onSort={handleSort} />
+              <SortHeader col="nextTask" label="Prochaine tâche" sort={sort} onSort={handleSort} />
               <th className="w-10 px-4 py-2.5" />
             </tr>
           </thead>
           <tbody className="divide-y">
-            {sorted.map((c) => {
+            {processed.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-4 py-12 text-center text-xs text-muted-foreground">
+                  Aucun candidat correspondant aux filtres
+                </td>
+              </tr>
+            ) : processed.map((c) => {
               const nextDate = formatDate(c.nextTaskAt);
               const nextOverdue = c.nextTaskOverdue;
               return (
@@ -148,16 +389,13 @@ export function PipelineList({
                     </Link>
                   </td>
                   <td className="px-4 py-3">
-                    <span className={cn(
-                      "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
-                      STATUS_BADGE[c.status] ?? "bg-muted text-muted-foreground"
-                    )}>
+                    <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", STATUS_BADGE[c.status] ?? "bg-muted text-muted-foreground")}>
                       {STATUS_LABELS[c.status] ?? c.status}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">{c.cursusEnvisage ?? "—"}</td>
                   <td className="px-4 py-3 text-muted-foreground">{c.ownerName ?? "—"}</td>
-                  <td className={cn("px-4 py-3 text-sm", nextOverdue ? "text-destructive font-medium" : "text-muted-foreground")}>
+                  <td className={cn("px-4 py-3", nextOverdue ? "text-destructive font-medium" : "text-muted-foreground")}>
                     {nextDate ?? "—"}
                   </td>
                   <td className="px-4 py-3">
@@ -169,12 +407,8 @@ export function PipelineList({
                         {archived ? (
                           <DropdownMenuGroup>
                             <DropdownMenuLabel>Remettre dans pipeline</DropdownMenuLabel>
-                            <DropdownMenuItem onClick={() => onStatusChange(c.id, "to_call")}>
-                              À appeler
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => onStatusChange(c.id, "in_progress")}>
-                              En cours
-                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => onStatusChange(c.id, "to_call")}>À appeler</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => onStatusChange(c.id, "in_progress")}>En cours</DropdownMenuItem>
                           </DropdownMenuGroup>
                         ) : (
                           <>
@@ -189,12 +423,8 @@ export function PipelineList({
                             <DropdownMenuSeparator />
                             <DropdownMenuGroup>
                               <DropdownMenuLabel>Archiver</DropdownMenuLabel>
-                              <DropdownMenuItem onClick={() => onStatusChange(c.id, "temporary_refusal")}>
-                                Refus temporaire
-                              </DropdownMenuItem>
-                              <DropdownMenuItem variant="destructive" onClick={() => onStatusChange(c.id, "definitive_refusal")}>
-                                Refus définitif
-                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => onStatusChange(c.id, "temporary_refusal")}>Refus temporaire</DropdownMenuItem>
+                              <DropdownMenuItem variant="destructive" onClick={() => onStatusChange(c.id, "definitive_refusal")}>Refus définitif</DropdownMenuItem>
                             </DropdownMenuGroup>
                           </>
                         )}
