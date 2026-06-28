@@ -16,6 +16,8 @@ export type CandidatRow = {
   ownerName: string | null;
   nextTaskAt: string | null;
   updatedAt: string;
+  isInactive: boolean;
+  nextTaskOverdue: boolean;
 };
 
 export async function loadPipelineCandidates(): Promise<CandidatRow[]> {
@@ -60,17 +62,28 @@ export async function loadPipelineCandidates(): Promise<CandidatRow[]> {
     }
   }
 
-  return rows.map((r) => ({
-    id: r.id,
-    firstName: r.firstName,
-    lastName: r.lastName,
-    status: r.status,
-    cursusEnvisage: r.cursusEnvisage ?? null,
-    ownerId: r.ownerId ?? null,
-    ownerName: r.ownerName ?? null,
-    nextTaskAt: nextTaskMap.get(r.id) ?? null,
-    updatedAt: r.updatedAt.toISOString(),
-  }));
+  const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+
+  return rows.map((r) => {
+    const nextTaskAt = nextTaskMap.get(r.id) ?? null;
+    const updatedAt = r.updatedAt.toISOString();
+    const inactive =
+      r.updatedAt < twoDaysAgo &&
+      (!nextTaskAt || new Date(nextTaskAt) < new Date());
+    return {
+      id: r.id,
+      firstName: r.firstName,
+      lastName: r.lastName,
+      status: r.status,
+      cursusEnvisage: r.cursusEnvisage ?? null,
+      ownerId: r.ownerId ?? null,
+      ownerName: r.ownerName ?? null,
+      nextTaskAt,
+      updatedAt,
+      isInactive: inactive,
+      nextTaskOverdue: !!nextTaskAt && new Date(nextTaskAt) < new Date(),
+    };
+  });
 }
 
 export async function updateCandidateStatus(id: string, status: string, lostReason?: string) {

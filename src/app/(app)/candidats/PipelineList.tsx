@@ -139,7 +139,7 @@ export function PipelineList({
           <tbody className="divide-y">
             {sorted.map((c) => {
               const nextDate = formatDate(c.nextTaskAt);
-              const nextOverdue = c.nextTaskAt && new Date(c.nextTaskAt) < new Date();
+              const nextOverdue = c.nextTaskOverdue;
               return (
                 <tr key={c.id} className="hover:bg-muted/30 transition-colors">
                   <td className="px-4 py-3">

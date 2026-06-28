@@ -61,13 +61,6 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
 }
 
-function checkInactive(c: CandidatRow) {
-  const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
-  if (new Date(c.updatedAt) > twoDaysAgo) return false;
-  if (!c.nextTaskAt) return true;
-  return new Date(c.nextTaskAt) < new Date();
-}
-
 // ─── Candidate Card ─────────────────────────────────────────────────────────
 
 function CandidatCard({
@@ -79,8 +72,8 @@ function CandidatCard({
   onStatusChange: (id: string, status: string) => void;
   isDragging?: boolean;
 }) {
-  const inactive = checkInactive(candidate);
-  const nextOverdue = candidate.nextTaskAt && new Date(candidate.nextTaskAt) < new Date();
+  const inactive = candidate.isInactive;
+  const nextOverdue = candidate.nextTaskOverdue;
 
   return (
     <div className={cn(
