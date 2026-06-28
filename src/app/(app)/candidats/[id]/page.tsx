@@ -19,6 +19,11 @@ import { BlocExperiences } from "./BlocExperiences";
 import { BlocFormations } from "./BlocFormations";
 import { BlocTaches } from "./BlocTaches";
 import { BlocHistorique } from "./BlocHistorique";
+import { BlocMatchings } from "./BlocMatchings";
+import {
+  loadMatchingsForCandidate,
+  loadAvailableNeedsForCandidate,
+} from "@/app/(app)/matching/actions";
 
 const STATUS_LABELS: Record<string, string> = {
   to_call: "À appeler",
@@ -55,7 +60,7 @@ export default async function CandidatPage({
     getActiveCursus(),
   ]);
 
-  const [candidat, experiences, formations, skills, candidateTasks, activeProfiles] = await Promise.all([
+  const [candidat, experiences, formations, skills, candidateTasks, activeProfiles, candidateMatchings, availableNeeds] = await Promise.all([
     db.query.candidates.findFirst({
       where: and(eq(candidates.id, id), isNull(candidates.deletedAt)),
     }),
@@ -113,6 +118,8 @@ export default async function CandidatPage({
       .from(profiles)
       .where(and(eq(profiles.active, true), isNull(profiles.deletedAt)))
       .orderBy(asc(profiles.fullName)),
+    loadMatchingsForCandidate(id),
+    loadAvailableNeedsForCandidate(id),
   ]);
 
   if (!candidat) notFound();
@@ -218,6 +225,13 @@ export default async function CandidatPage({
             <BlocFormations candidateId={candidat.id} initialFormations={formations} embedded />
           </div>
         </section>
+
+        {/* Besoins liés */}
+        <BlocMatchings
+          candidateId={candidat.id}
+          initialMatchings={candidateMatchings}
+          availableNeeds={availableNeeds}
+        />
 
         {/* Historique */}
         <BlocHistorique candidateId={candidat.id} />

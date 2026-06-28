@@ -7,6 +7,7 @@ import {
   type DragEndEvent, type DragStartEvent,
 } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
+import Link from "next/link";
 import { MoreHorizontal, Clock, AlertCircle, MapPin, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -61,7 +62,13 @@ function NeedCard({
     )}>
       <div className="flex items-start gap-1.5 mb-1.5">
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium leading-tight truncate">{need.title}</p>
+          <Link
+            href={`/besoins/${need.id}`}
+            className="text-sm font-medium leading-tight truncate block hover:text-primary transition-colors"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {need.title}
+          </Link>
           <p className="text-xs text-muted-foreground truncate mt-0.5">{need.companyName}</p>
         </div>
         <DropdownMenu>

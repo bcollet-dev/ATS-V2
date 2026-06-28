@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect, useTransition } from "react";
+import Link from "next/link";
 import {
   ChevronUp, ChevronDown, MoreHorizontal,
   SlidersHorizontal, Check, Search,
@@ -147,10 +148,12 @@ function StatusCell({
 function TextCell({
   value,
   placeholder,
+  href,
   onSave,
 }: {
   value: string | null;
   placeholder: string;
+  href?: string;
   onSave: (val: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -172,6 +175,17 @@ function TextCell({
         onKeyDown={(e) => { if (e.key === "Enter") commit(); if (e.key === "Escape") { setDraft(value ?? ""); setEditing(false); } }}
         className="w-full rounded border border-input bg-background px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
       />
+    );
+  }
+
+  if (href && value) {
+    return (
+      <div className="flex items-center gap-1 group">
+        <Link href={href as never} className="text-sm font-medium hover:text-primary transition-colors truncate">{value}</Link>
+        <button onClick={() => { setDraft(value); setEditing(true); }} className="opacity-0 group-hover:opacity-60 hover:!opacity-100 text-muted-foreground transition-opacity shrink-0" title="Modifier">
+          <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828a4 4 0 01-2.828 1.172H7v-2a4 4 0 011.172-2.828z" /></svg>
+        </button>
+      </div>
     );
   }
 
@@ -498,6 +512,7 @@ export function PipelineList({
                     <TextCell
                       value={n.title}
                       placeholder="Titre"
+                      href={`/besoins/${n.id}`}
                       onSave={(val) => startTransition(async () => { await updateNeedTitle(n.id, val); })}
                     />
                   </td>
