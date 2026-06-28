@@ -125,13 +125,15 @@ export function AppShell({
               <div className="flex-1 text-left min-w-0 group/name">
                 <div className="flex items-center gap-1">
                   <p className="text-xs font-medium truncate">{user.fullName}</p>
-                  <button
-                    type="button"
+                  <span
+                    role="button"
+                    tabIndex={0}
                     onClick={(e) => { e.stopPropagation(); setEditNameOpen(true); }}
-                    className="opacity-0 group-hover/name:opacity-100 transition-opacity rounded p-0.5 hover:bg-sidebar-accent"
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); setEditNameOpen(true); } }}
+                    className="opacity-0 group-hover/name:opacity-100 transition-opacity rounded p-0.5 hover:bg-sidebar-accent cursor-pointer"
                   >
                     <Pencil className="h-2.5 w-2.5 text-muted-foreground" />
-                  </button>
+                  </span>
                 </div>
                 <p className="text-xs text-muted-foreground truncate">
                   {ROLE_LABELS[user.role]}
