@@ -35,8 +35,8 @@ const ACTIVE_STATUSES = [
   { key: "pvpp",              label: "PVPP" },
   { key: "admissible",        label: "Admissible" },
   { key: "company_interview", label: "Entretien entreprise" },
-  { key: "placed",            label: "Placé" },
   { key: "waiting_fre",       label: "Attente FRE" },
+  { key: "placed",            label: "Placé" },
   { key: "contract_break",    label: "Rupture" },
 ] as const;
 
