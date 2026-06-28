@@ -63,15 +63,15 @@ function FilterPopover({
   col: SortKey;
   label: string;
   allValues: string[];
-  selected: Set<string>;
-  onSelect: (values: Set<string>) => void;
+  selected: Set<string> | null;
+  onSelect: (values: Set<string> | null) => void;
   sort: { key: SortKey; dir: SortDir } | null;
   onSort: (key: SortKey, dir: SortDir) => void;
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [search, setSearch] = useState("");
-  const allSelected = selected.size === 0;
+  const allSelected = selected === null;
 
   useEffect(() => {
     function handler(e: MouseEvent) {
@@ -86,17 +86,14 @@ function FilterPopover({
     : allValues;
 
   function toggle(value: string) {
-    const next = new Set(selected);
-    if (next.has(value)) {
-      next.delete(value);
-      if (next.size === 0) { onSelect(new Set()); return; }
-    } else {
-      next.add(value);
-    }
+    const base = selected ?? new Set(allValues);
+    const next = new Set(base);
+    if (next.has(value)) next.delete(value);
+    else next.add(value);
     onSelect(next);
   }
 
-  function selectAll() { onSelect(new Set()); }
+  function selectAll() { onSelect(null); }
 
   const activeSort = sort?.key === col ? sort.dir : null;
 
@@ -158,7 +155,7 @@ function FilterPopover({
           <p className="px-3 py-3 text-xs text-muted-foreground text-center">Aucun résultat</p>
         )}
         {visibleValues.map((val) => {
-          const checked = allSelected || selected.has(val);
+          const checked = allSelected || (selected?.has(val) ?? false);
           return (
             <button
               key={val}
@@ -191,14 +188,14 @@ function ColHeader({
   col: SortKey;
   label: string;
   allValues: string[];
-  filters: Map<SortKey, Set<string>>;
-  onFilters: (col: SortKey, values: Set<string>) => void;
+  filters: Map<SortKey, Set<string> | null>;
+  onFilters: (col: SortKey, values: Set<string> | null) => void;
   sort: { key: SortKey; dir: SortDir } | null;
   onSort: (key: SortKey, dir: SortDir) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const selected = filters.get(col) ?? new Set<string>();
-  const isFiltered = selected.size > 0;
+  const selected = filters.has(col) ? filters.get(col)! : null;
+  const isFiltered = filters.has(col) && selected !== null;
   const isSorted = sort?.key === col;
 
   return (
@@ -239,13 +236,13 @@ function ColHeader({
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function ListView({ tasks, onSelect }: { tasks: TaskFull[]; onSelect: (t: TaskFull) => void }) {
-  const [filters, setFilters] = useState<Map<SortKey, Set<string>>>(new Map());
+  const [filters, setFilters] = useState<Map<SortKey, Set<string> | null>>(new Map());
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir } | null>({ key: "dueAt", dir: "asc" });
 
-  function handleFilters(col: SortKey, values: Set<string>) {
+  function handleFilters(col: SortKey, values: Set<string> | null) {
     setFilters((prev) => {
       const next = new Map(prev);
-      if (values.size === 0) next.delete(col);
+      if (values === null) next.delete(col);
       else next.set(col, values);
       return next;
     });
@@ -267,7 +264,7 @@ export function ListView({ tasks, onSelect }: { tasks: TaskFull[]; onSelect: (t:
 
     // Apply column filters
     for (const [col, values] of filters.entries()) {
-      if (values.size === 0) continue;
+      if (values === null) continue;
       result = result.filter((t) => values.has(getColValue(t, col)));
     }
 
@@ -283,7 +280,7 @@ export function ListView({ tasks, onSelect }: { tasks: TaskFull[]; onSelect: (t:
     return result;
   }, [tasks, filters, sort]);
 
-  const activeFilterCount = [...filters.values()].filter((s) => s.size > 0).length;
+  const activeFilterCount = [...filters.values()].filter((s) => s !== null).length;
 
   const cols: { key: SortKey; label: string }[] = [
     { key: "title",    label: "Tâche" },

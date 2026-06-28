@@ -65,7 +65,7 @@ export default async function TachesPage() {
         </p>
       </div>
 
-      <KanbanBoard tasks={serialized} profiles={activeProfiles} />
+      <KanbanBoard tasks={serialized} profiles={activeProfiles} isManager={isManager} />
     </div>
   );
 }

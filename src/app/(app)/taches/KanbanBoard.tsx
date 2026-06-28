@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { TaskSlideOver, type TaskFull } from "./TaskSlideOver";
 import { CreateTaskModal } from "./CreateTaskModal";
 import { ListView } from "./ListView";
+import { TeamView } from "./TeamView";
 
 type Profile = { id: string; fullName: string; email: string };
 
@@ -89,31 +90,55 @@ function EmptyCol({ label }: { label: string }) {
   );
 }
 
-type Tab = "todo" | "overdue" | "done";
+type Tab = "todo" | "overdue" | "done" | "team";
 type ViewMode = "kanban" | "list";
 
-export function KanbanBoard({ tasks, profiles }: { tasks: TaskFull[]; profiles: Profile[] }) {
+export function KanbanBoard({
+  tasks,
+  profiles,
+  isManager,
+}: {
+  tasks: TaskFull[];
+  profiles: Profile[];
+  isManager: boolean;
+}) {
   const [tab, setTab] = useState<Tab>("todo");
   const [view, setView] = useState<ViewMode>("kanban");
   const [createOpen, setCreateOpen] = useState(false);
   const [selected, setSelected] = useState<TaskFull | null>(null);
+  const [personFilter, setPersonFilter] = useState<{ id: string; name: string } | null>(null);
   const now = new Date();
 
-  const todo    = tasks.filter((t) => !t.completedAt && new Date(t.dueAt) >= now);
-  const overdue = tasks.filter((t) => !t.completedAt && new Date(t.dueAt) < now);
-  const done    = tasks.filter((t) => !!t.completedAt);
+  const visibleTasks = personFilter
+    ? tasks.filter((t) => t.assignedTo === personFilter.id)
+    : tasks;
 
-  const tabs: { key: Tab; label: string; count: number; activeClass: string }[] = [
+  const todo    = visibleTasks.filter((t) => !t.completedAt && new Date(t.dueAt) >= now);
+  const overdue = visibleTasks.filter((t) => !t.completedAt && new Date(t.dueAt) < now);
+  const done    = visibleTasks.filter((t) => !!t.completedAt);
+
+  function handleSelectPerson(id: string, name: string) {
+    setPersonFilter({ id, name });
+    setTab("todo");
+  }
+
+  function clearPersonFilter() {
+    setPersonFilter(null);
+  }
+
+  const tabs: { key: Tab; label: string; count?: number; activeClass: string }[] = [
     { key: "todo",    label: "À faire",   count: todo.length,    activeClass: "border-blue-500 text-blue-600" },
     { key: "overdue", label: "En retard", count: overdue.length, activeClass: "border-destructive text-destructive" },
     { key: "done",    label: "Terminé",   count: done.length,    activeClass: "border-emerald-500 text-emerald-700" },
+    ...(isManager ? [{ key: "team" as Tab, label: "Équipe", activeClass: "border-violet-500 text-violet-700" }] : []),
   ];
 
   const badgeClass = (key: Tab, active: boolean) =>
     active
       ? key === "todo"    ? "bg-blue-100 text-blue-700"
       : key === "overdue" ? "bg-red-100 text-red-700"
-      :                     "bg-emerald-100 text-emerald-700"
+      : key === "done"    ? "bg-emerald-100 text-emerald-700"
+      :                     "bg-violet-100 text-violet-700"
       : "bg-muted text-muted-foreground";
 
   const current = tab === "todo" ? todo : tab === "overdue" ? overdue : done;
@@ -134,12 +159,14 @@ export function KanbanBoard({ tasks, profiles }: { tasks: TaskFull[]; profiles: 
               )}
             >
               {label}
-              <span className={cn(
-                "inline-flex items-center justify-center rounded-full px-1.5 py-0.5 text-xs font-semibold min-w-[1.25rem]",
-                badgeClass(key, tab === key)
-              )}>
-                {count}
-              </span>
+              {count !== undefined && (
+                <span className={cn(
+                  "inline-flex items-center justify-center rounded-full px-1.5 py-0.5 text-xs font-semibold min-w-[1.25rem]",
+                  badgeClass(key, tab === key)
+                )}>
+                  {count}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -169,9 +196,22 @@ export function KanbanBoard({ tasks, profiles }: { tasks: TaskFull[]; profiles: 
         </div>
       </div>
 
+      {/* Person filter banner */}
+      {personFilter && tab !== "team" && (
+        <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-md bg-violet-50 border border-violet-200 text-xs text-violet-700">
+          <Users className="h-3.5 w-3.5 shrink-0" />
+          Tâches de <span className="font-medium">{personFilter.name}</span>
+          <button onClick={clearPersonFilter} className="ml-auto text-violet-500 hover:text-violet-700 underline">
+            Effacer
+          </button>
+        </div>
+      )}
+
       {/* Content */}
-      {view === "list" ? (
-        <ListView tasks={tasks} onSelect={setSelected} />
+      {tab === "team" ? (
+        <TeamView tasks={tasks} onSelectPerson={handleSelectPerson} />
+      ) : view === "list" ? (
+        <ListView tasks={visibleTasks} onSelect={setSelected} />
       ) : current.length === 0 ? (
         <EmptyCol label={tab === "todo" ? "à faire" : tab === "overdue" ? "en retard" : "terminée"} />
       ) : (
@@ -181,6 +221,7 @@ export function KanbanBoard({ tasks, profiles }: { tasks: TaskFull[]; profiles: 
           ))}
         </div>
       )}
+
 
       {/* Slide-over */}
       {selected && (
