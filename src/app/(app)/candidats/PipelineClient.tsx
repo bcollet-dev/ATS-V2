@@ -19,9 +19,11 @@ type Tab = "pipeline" | "archives";
 export function PipelineClient({
   candidates: initial,
   cursus,
+  profiles,
 }: {
   candidates: CandidatRow[];
   cursus: { id: string; name: string }[];
+  profiles: { id: string; fullName: string }[];
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("pipeline");
@@ -148,10 +150,10 @@ export function PipelineClient({
           view === "kanban" ? (
             <KanbanPipeline candidates={pipeline} onStatusChange={handleStatusChange} />
           ) : (
-            <PipelineList candidates={pipeline} onStatusChange={handleStatusChange} />
+            <PipelineList candidates={pipeline} onStatusChange={handleStatusChange} profiles={profiles} cursus={cursus} />
           )
         ) : (
-          <PipelineList candidates={archives} onStatusChange={handleStatusChange} archived />
+          <PipelineList candidates={archives} onStatusChange={handleStatusChange} profiles={profiles} cursus={cursus} archived />
         )}
       </div>
 

@@ -86,6 +86,24 @@ export async function loadPipelineCandidates(): Promise<CandidatRow[]> {
   });
 }
 
+export async function updateCandidatCursus(id: string, cursusEnvisage: string) {
+  await requireAuth();
+  await db
+    .update(candidates)
+    .set({ cursusEnvisage: cursusEnvisage || null, updatedAt: new Date() })
+    .where(eq(candidates.id, id));
+  revalidatePath("/candidats");
+}
+
+export async function updateCandidatOwner(id: string, ownerId: string | null) {
+  await requireAuth();
+  await db
+    .update(candidates)
+    .set({ ownerId: ownerId || null, updatedAt: new Date() })
+    .where(eq(candidates.id, id));
+  revalidatePath("/candidats");
+}
+
 export async function updateCandidateStatus(id: string, status: string, lostReason?: string) {
   await requireAuth();
   await db
