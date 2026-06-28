@@ -1,12 +1,17 @@
 "use client";
 
-import { useState, useTransition, useOptimistic } from "react";
-import { Briefcase, Archive, LayoutGrid, List, Plus } from "lucide-react";
+import { useState, useTransition, useOptimistic, useEffect } from "react";
+import Link from "next/link";
+import { Briefcase, Archive, LayoutGrid, List, Plus, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Modal, ModalContent, ModalHeader, ModalTitle, ModalBody, ModalFooter } from "@/components/ui/modal";
 import { Label } from "@/components/ui/label";
 import { updateNeedStatus, type NeedRow } from "./actions";
+import {
+  loadMatchingsForNeed,
+  updateMatchingStatus,
+} from "@/app/(app)/matching/actions";
 import { KanbanPipeline } from "./KanbanPipeline";
 import { PipelineList } from "./PipelineList";
 import { NeedDrawer } from "./NeedDrawer";
@@ -21,11 +26,13 @@ const REASON_REQUIRED = new Set(["rupture", "lost"]);
 function LostModal({
   open,
   needTitle,
+  activeMatchingsCount,
   onConfirm,
   onCancel,
 }: {
   open: boolean;
   needTitle: string;
+  activeMatchingsCount: number;
   onConfirm: (reason: string) => void;
   onCancel: () => void;
 }) {
@@ -53,6 +60,11 @@ function LostModal({
           <p className="text-sm text-muted-foreground">
             Motif de perte pour <span className="font-medium text-foreground">{needTitle}</span>
           </p>
+          {activeMatchingsCount > 0 && (
+            <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+              {activeMatchingsCount} candidat{activeMatchingsCount > 1 ? "s" : ""} rattaché{activeMatchingsCount > 1 ? "s" : ""} ser{activeMatchingsCount > 1 ? "ont" : "a"} marqué{activeMatchingsCount > 1 ? "s" : ""} «&nbsp;Non retenu&nbsp;».
+            </p>
+          )}
           <div className="space-y-1.5">
             <Label htmlFor="lost-reason">Motif <span className="text-destructive">*</span></Label>
             <textarea
@@ -75,6 +87,281 @@ function LostModal({
   );
 }
 
+// ─── Select Retenu Modal ──────────────────────────────────────────────────────
+
+function SelectRetenuModal({
+  open,
+  needId,
+  needTitle,
+  activeMatchingsCount,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean;
+  needId: string;
+  needTitle: string;
+  activeMatchingsCount: number;
+  onConfirm: (matchingId: string) => void;
+  onCancel: () => void;
+}) {
+  const [rows, setRows] = useState<{ id: string; candidateName: string; candidateCursus: string | null }[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [selected, setSelected] = useState("");
+
+  useEffect(() => {
+    if (!open) { setRows([]); setSelected(""); return; }
+    if (activeMatchingsCount === 0) return;
+    setLoading(true);
+    loadMatchingsForNeed(needId).then((data) => {
+      setRows(
+        data
+          .filter((m) => !m.isFrozen && m.propositionStatus !== "not_retained" && m.propositionStatus !== "placed")
+          .map((m) => ({ id: m.id, candidateName: m.candidateName, candidateCursus: m.candidateCursus }))
+      );
+      setLoading(false);
+    });
+  }, [open, needId, activeMatchingsCount]);
+
+  function handleClose() {
+    setSelected("");
+    onCancel();
+  }
+
+  function handleConfirm() {
+    if (!selected) return;
+    onConfirm(selected);
+    setSelected("");
+  }
+
+  return (
+    <Modal open={open} onOpenChange={(o) => { if (!o) handleClose(); }}>
+      <ModalContent className="max-w-md">
+        <ModalHeader>
+          <ModalTitle>Candidat retenu requis</ModalTitle>
+        </ModalHeader>
+        <ModalBody className="space-y-3">
+          {activeMatchingsCount === 0 ? (
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">
+                Aucun candidat n&apos;est rattaché à{" "}
+                <span className="font-medium text-foreground">{needTitle}</span>.
+                Proposez d&apos;abord un candidat et marquez-le Retenu.
+              </p>
+              <Link
+                href={`/besoins/${needId}`}
+                className="text-sm text-primary hover:underline"
+                onClick={handleClose}
+              >
+                Voir la fiche besoin →
+              </Link>
+            </div>
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground">
+                Pour passer <span className="font-medium text-foreground">{needTitle}</span> en
+                Attente FRE, sélectionnez le candidat retenu.
+              </p>
+              {loading ? (
+                <p className="py-4 text-center text-sm text-muted-foreground">Chargement…</p>
+              ) : rows.length === 0 ? (
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">Aucun candidat actif disponible.</p>
+                  <Link
+                    href={`/besoins/${needId}`}
+                    className="text-sm text-primary hover:underline"
+                    onClick={handleClose}
+                  >
+                    Voir la fiche besoin →
+                  </Link>
+                </div>
+              ) : (
+                <div className="rounded-md border divide-y max-h-56 overflow-y-auto">
+                  {rows.map((r) => (
+                    <button
+                      key={r.id}
+                      onClick={() => setSelected(r.id)}
+                      className={cn(
+                        "flex items-start w-full px-3 py-2.5 text-left hover:bg-accent transition-colors gap-3",
+                        selected === r.id && "bg-accent"
+                      )}
+                    >
+                      <span className={cn(
+                        "mt-0.5 h-3.5 w-3.5 rounded-full border shrink-0 flex items-center justify-center",
+                        selected === r.id ? "bg-primary border-primary" : "border-input"
+                      )}>
+                        {selected === r.id && <Check className="h-2.5 w-2.5 text-primary-foreground" />}
+                      </span>
+                      <span>
+                        <span className="text-sm font-medium">{r.candidateName}</span>
+                        {r.candidateCursus && (
+                          <span className="block text-xs text-muted-foreground">{r.candidateCursus}</span>
+                        )}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </ModalBody>
+        <ModalFooter>
+          <Button variant="outline" onClick={handleClose}>Annuler</Button>
+          {activeMatchingsCount > 0 && (
+            <Button onClick={handleConfirm} disabled={!selected || loading}>
+              Marquer Retenu
+            </Button>
+          )}
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
+  );
+}
+
+// ─── Select Interview Modal ───────────────────────────────────────────────────
+
+function SelectInterviewModal({
+  open,
+  needId,
+  needTitle,
+  activeMatchingsCount,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean;
+  needId: string;
+  needTitle: string;
+  activeMatchingsCount: number;
+  onConfirm: (matchingIds: string[]) => void;
+  onCancel: () => void;
+}) {
+  const [rows, setRows] = useState<{ id: string; candidateName: string; candidateCursus: string | null }[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!open) { setRows([]); setSelected(new Set()); return; }
+    if (activeMatchingsCount === 0) return;
+    setLoading(true);
+    loadMatchingsForNeed(needId).then((data) => {
+      setRows(
+        data
+          .filter((m) => !m.isFrozen && m.propositionStatus === "cv_sent")
+          .map((m) => ({ id: m.id, candidateName: m.candidateName, candidateCursus: m.candidateCursus }))
+      );
+      setLoading(false);
+    });
+  }, [open, needId, activeMatchingsCount]);
+
+  function toggle(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function handleClose() {
+    setSelected(new Set());
+    onCancel();
+  }
+
+  function handleConfirm() {
+    if (selected.size === 0) return;
+    onConfirm([...selected]);
+    setSelected(new Set());
+  }
+
+  return (
+    <Modal open={open} onOpenChange={(o) => { if (!o) handleClose(); }}>
+      <ModalContent className="max-w-md">
+        <ModalHeader>
+          <ModalTitle>Candidat(s) en entretien requis</ModalTitle>
+        </ModalHeader>
+        <ModalBody className="space-y-3">
+          {activeMatchingsCount === 0 ? (
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">
+                Aucun candidat n&apos;est rattaché à{" "}
+                <span className="font-medium text-foreground">{needTitle}</span>.
+                Proposez d&apos;abord un candidat.
+              </p>
+              <Link
+                href={`/besoins/${needId}`}
+                className="text-sm text-primary hover:underline"
+                onClick={handleClose}
+              >
+                Voir la fiche besoin →
+              </Link>
+            </div>
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground">
+                Pour passer <span className="font-medium text-foreground">{needTitle}</span> en
+                Entretien, sélectionnez le ou les candidats concernés.
+              </p>
+              {loading ? (
+                <p className="py-4 text-center text-sm text-muted-foreground">Chargement…</p>
+              ) : rows.length === 0 ? (
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">
+                    Aucun candidat en phase &quot;CV envoyé&quot; disponible.
+                  </p>
+                  <Link
+                    href={`/besoins/${needId}`}
+                    className="text-sm text-primary hover:underline"
+                    onClick={handleClose}
+                  >
+                    Voir la fiche besoin →
+                  </Link>
+                </div>
+              ) : (
+                <div className="rounded-md border divide-y max-h-56 overflow-y-auto">
+                  {rows.map((r) => {
+                    const checked = selected.has(r.id);
+                    return (
+                      <button
+                        key={r.id}
+                        onClick={() => toggle(r.id)}
+                        className={cn(
+                          "flex items-start w-full px-3 py-2.5 text-left hover:bg-accent transition-colors gap-3",
+                          checked && "bg-accent"
+                        )}
+                      >
+                        <span className={cn(
+                          "mt-0.5 h-3.5 w-3.5 rounded border shrink-0 flex items-center justify-center",
+                          checked ? "bg-primary border-primary" : "border-input"
+                        )}>
+                          {checked && <Check className="h-2.5 w-2.5 text-primary-foreground" />}
+                        </span>
+                        <span>
+                          <span className="text-sm font-medium">{r.candidateName}</span>
+                          {r.candidateCursus && (
+                            <span className="block text-xs text-muted-foreground">{r.candidateCursus}</span>
+                          )}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
+        </ModalBody>
+        <ModalFooter>
+          <Button variant="outline" onClick={handleClose}>Annuler</Button>
+          {activeMatchingsCount > 0 && (
+            <Button onClick={handleConfirm} disabled={selected.size === 0 || loading}>
+              Marquer Entretien prévu
+            </Button>
+          )}
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
+  );
+}
+
+// ─── Pipeline Client ──────────────────────────────────────────────────────────
+
 export function PipelineClient({
   needs: initial,
   cursus,
@@ -89,7 +376,13 @@ export function PipelineClient({
   const [tab, setTab] = useState<Tab>("pipeline");
   const [view, setView] = useState<ViewMode>("kanban");
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [pending, setPending] = useState<{ id: string; status: string } | null>(null);
+  const [pending, setPending] = useState<{ id: string; status: string; activeMatchingsCount: number } | null>(null);
+  const [pendingRetenu, setPendingRetenu] = useState<{
+    id: string; title: string; activeMatchingsCount: number;
+  } | null>(null);
+  const [pendingInterview, setPendingInterview] = useState<{
+    id: string; title: string; activeMatchingsCount: number;
+  } | null>(null);
   const [, startTransition] = useTransition();
 
   const [needs, setOptimistic] = useOptimistic(
@@ -106,8 +399,31 @@ export function PipelineClient({
 
   function handleStatusChange(id: string, status: string) {
     if (REASON_REQUIRED.has(status)) {
-      setPending({ id, status });
+      const need = needs.find((n) => n.id === id);
+      setPending({ id, status, activeMatchingsCount: need?.activeMatchingsCount ?? 0 });
       return;
+    }
+    if (status === "interview") {
+      const need = needs.find((n) => n.id === id);
+      if (need && need.interviewCandidatesCount === 0) {
+        setPendingInterview({
+          id,
+          title: `${need.title} — ${need.companyName}`,
+          activeMatchingsCount: need.activeMatchingsCount,
+        });
+        return;
+      }
+    }
+    if (status === "waiting_fre") {
+      const need = needs.find((n) => n.id === id);
+      if (need && need.waitingFreCandidatesCount === 0) {
+        setPendingRetenu({
+          id,
+          title: `${need.title} — ${need.companyName}`,
+          activeMatchingsCount: need.activeMatchingsCount,
+        });
+        return;
+      }
     }
     startTransition(async () => {
       setOptimistic({ id, status });
@@ -122,6 +438,28 @@ export function PipelineClient({
     startTransition(async () => {
       setOptimistic({ id, status });
       await updateNeedStatus(id, status, reason);
+    });
+  }
+
+  function handleRetenuConfirm(matchingId: string) {
+    if (!pendingRetenu) return;
+    const { id } = pendingRetenu;
+    setPendingRetenu(null);
+    startTransition(async () => {
+      setOptimistic({ id, status: "waiting_fre" });
+      await updateMatchingStatus(matchingId, "waiting_fre");
+      await updateNeedStatus(id, "waiting_fre");
+    });
+  }
+
+  function handleInterviewConfirm(matchingIds: string[]) {
+    if (!pendingInterview || matchingIds.length === 0) return;
+    const { id } = pendingInterview;
+    setPendingInterview(null);
+    startTransition(async () => {
+      setOptimistic({ id, status: "interview" });
+      await Promise.all(matchingIds.map((mId) => updateMatchingStatus(mId, "interview")));
+      await updateNeedStatus(id, "interview");
     });
   }
 
@@ -224,8 +562,27 @@ export function PipelineClient({
       <LostModal
         open={!!pending}
         needTitle={pendingTitle}
+        activeMatchingsCount={pending?.activeMatchingsCount ?? 0}
         onConfirm={handleConfirm}
         onCancel={() => setPending(null)}
+      />
+
+      <SelectRetenuModal
+        open={!!pendingRetenu}
+        needId={pendingRetenu?.id ?? ""}
+        needTitle={pendingRetenu?.title ?? ""}
+        activeMatchingsCount={pendingRetenu?.activeMatchingsCount ?? 0}
+        onConfirm={handleRetenuConfirm}
+        onCancel={() => setPendingRetenu(null)}
+      />
+
+      <SelectInterviewModal
+        open={!!pendingInterview}
+        needId={pendingInterview?.id ?? ""}
+        needTitle={pendingInterview?.title ?? ""}
+        activeMatchingsCount={pendingInterview?.activeMatchingsCount ?? 0}
+        onConfirm={handleInterviewConfirm}
+        onCancel={() => setPendingInterview(null)}
       />
     </div>
   );

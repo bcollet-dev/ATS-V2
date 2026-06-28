@@ -2,9 +2,10 @@
 
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/db";
-import { candidates, profiles, tasks } from "@/db/schema";
-import { eq, isNull, and, asc, inArray } from "drizzle-orm";
+import { candidates, profiles, tasks, matchings, needs, companies } from "@/db/schema";
+import { eq, isNull, and, asc, inArray, notInArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { syncNeedStatusFromMatchings } from "@/app/(app)/matching/actions";
 
 export type CandidatRow = {
   id: string;
@@ -18,6 +19,7 @@ export type CandidatRow = {
   updatedAt: string;
   isInactive: boolean;
   nextTaskOverdue: boolean;
+  needMatchings: Array<{ matchingId: string; needId: string; needTitle: string; propositionStatus: string; isFrozen: boolean }>;
 };
 
 export async function loadPipelineCandidates(): Promise<CandidatRow[]> {
@@ -43,23 +45,50 @@ export async function loadPipelineCandidates(): Promise<CandidatRow[]> {
 
   const candidateIds = rows.map((r) => r.id);
 
-  const nextTaskRows = await db
-    .select({ candidateId: tasks.candidateId, dueAt: tasks.dueAt })
-    .from(tasks)
-    .where(
-      and(
-        inArray(tasks.candidateId, candidateIds),
-        isNull(tasks.completedAt),
-        isNull(tasks.deletedAt),
+  const [nextTaskRows, matchingRows] = await Promise.all([
+    db
+      .select({ candidateId: tasks.candidateId, dueAt: tasks.dueAt })
+      .from(tasks)
+      .where(
+        and(
+          inArray(tasks.candidateId, candidateIds),
+          isNull(tasks.completedAt),
+          isNull(tasks.deletedAt),
+        )
       )
-    )
-    .orderBy(asc(tasks.dueAt));
+      .orderBy(asc(tasks.dueAt)),
+    db
+      .select({
+        candidateId: matchings.candidateId,
+        matchingId: matchings.id,
+        needId: matchings.needId,
+        needTitle: needs.title,
+        propositionStatus: matchings.propositionStatus,
+        isFrozen: matchings.isFrozen,
+      })
+      .from(matchings)
+      .innerJoin(needs, eq(matchings.needId, needs.id))
+      .where(
+        and(
+          inArray(matchings.candidateId, candidateIds),
+          notInArray(matchings.propositionStatus, ["not_retained"]),
+        )
+      )
+      .orderBy(asc(matchings.createdAt)),
+  ]);
 
   const nextTaskMap = new Map<string, string>();
   for (const t of nextTaskRows) {
     if (t.candidateId && !nextTaskMap.has(t.candidateId)) {
       nextTaskMap.set(t.candidateId, t.dueAt.toISOString());
     }
+  }
+
+  const needMatchingsByCandidate = new Map<string, Array<{ matchingId: string; needId: string; needTitle: string; propositionStatus: string; isFrozen: boolean }>>();
+  for (const r of matchingRows) {
+    const cid = r.candidateId as string;
+    if (!needMatchingsByCandidate.has(cid)) needMatchingsByCandidate.set(cid, []);
+    needMatchingsByCandidate.get(cid)!.push({ matchingId: r.matchingId, needId: r.needId, needTitle: r.needTitle, propositionStatus: r.propositionStatus, isFrozen: r.isFrozen });
   }
 
   const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
@@ -82,6 +111,7 @@ export async function loadPipelineCandidates(): Promise<CandidatRow[]> {
       updatedAt,
       isInactive: inactive,
       nextTaskOverdue: !!nextTaskAt && new Date(nextTaskAt) < new Date(),
+      needMatchings: needMatchingsByCandidate.get(r.id) ?? [],
     };
   });
 }
@@ -104,6 +134,8 @@ export async function updateCandidatOwner(id: string, ownerId: string | null) {
   revalidatePath("/candidats");
 }
 
+const ARCHIVE_STATUSES = new Set(["temporary_refusal", "definitive_refusal"]);
+
 export async function updateCandidateStatus(id: string, status: string, lostReason?: string) {
   await requireAuth();
   await db
@@ -114,5 +146,34 @@ export async function updateCandidateStatus(id: string, status: string, lostReas
       ...(lostReason !== undefined ? { lostReason } : {}),
     })
     .where(eq(candidates.id, id));
+
+  if (ARCHIVE_STATUSES.has(status)) {
+    const refusalReason = status === "definitive_refusal" ? "Refus définitif" : "Refus temporaire";
+
+    // Get all active matchings for this candidate (not already not_retained)
+    const activeMatchings = await db
+      .select({ id: matchings.id, needId: matchings.needId })
+      .from(matchings)
+      .where(
+        and(
+          eq(matchings.candidateId, id),
+          notInArray(matchings.propositionStatus, ["not_retained"])
+        )
+      );
+
+    if (activeMatchings.length > 0) {
+      await db
+        .update(matchings)
+        .set({ propositionStatus: "not_retained", refusalReason, updatedAt: new Date() })
+        .where(inArray(matchings.id, activeMatchings.map((m) => m.id)));
+
+      // Re-sync each affected besoin's status
+      const needIds = [...new Set(activeMatchings.map((m) => m.needId as string))];
+      await Promise.all(needIds.map(syncNeedStatusFromMatchings));
+
+      revalidatePath("/besoins");
+    }
+  }
+
   revalidatePath("/candidats");
 }

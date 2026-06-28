@@ -13,7 +13,7 @@ import {
 import { BlocPropositions } from "./BlocPropositions";
 
 const STATUS_LABELS: Record<string, string> = {
-  ad_chase:         "À démarcher",
+  ad_chase:         "Ad Chase",
   prospect:         "Prospect",
   need_in_progress: "Besoin en cours",
   interview:        "Entretien",
@@ -109,6 +109,7 @@ export default async function BesoinPage({
       {/* Propositions */}
       <BlocPropositions
         needId={id}
+        needStatus={need.status}
         initialMatchings={matchingRows}
         availableCandidates={availableCandidates}
       />

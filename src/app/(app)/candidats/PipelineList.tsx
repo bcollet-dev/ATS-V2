@@ -62,6 +62,25 @@ const STATUS_DOT: Record<string, string> = {
   definitive_refusal:"bg-red-400",
 };
 
+const PROP_DOT: Record<string, string> = {
+  cv_sent:     "bg-blue-400",
+  interview:   "bg-orange-400",
+  waiting_fre: "bg-amber-400",
+  placed:      "bg-amber-400",
+};
+const PROP_CHIP: Record<string, string> = {
+  cv_sent:     "bg-blue-50 text-blue-700",
+  interview:   "bg-orange-50 text-orange-700",
+  waiting_fre: "bg-amber-50 text-amber-700",
+  placed:      "bg-amber-50 text-amber-700",
+};
+const PROP_SHORT: Record<string, string> = {
+  cv_sent:     "CV",
+  interview:   "Entretien",
+  waiting_fre: "Retenu",
+  placed:      "Retenu ★",
+};
+
 const PIPELINE_STATUSES = [
   { key: "to_call",           label: "À appeler" },
   { key: "in_progress",       label: "En cours" },
@@ -460,6 +479,7 @@ export function PipelineList({
             <tr>
               <SortHeader col="name"     label="Candidat"        sort={sort} onSort={(k, d) => setSort({ key: k, dir: d })} />
               <ColHeader  col="status"   label="Étape"           allValues={allValues.get("status") ?? []}  filters={filters} onFilters={handleFilters} sort={sort} onSort={(k, d) => setSort({ key: k, dir: d })} />
+              <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Besoins</th>
               <ColHeader  col="cursus"   label="Cursus"          allValues={allValues.get("cursus") ?? []}  filters={filters} onFilters={handleFilters} sort={sort} onSort={(k, d) => setSort({ key: k, dir: d })} />
               <ColHeader  col="owner"    label="Recruteur"       allValues={allValues.get("owner") ?? []}   filters={filters} onFilters={handleFilters} sort={sort} onSort={(k, d) => setSort({ key: k, dir: d })} />
               <SortHeader col="nextTask" label="Prochaine tâche" sort={sort} onSort={(k, d) => setSort({ key: k, dir: d })} />
@@ -468,7 +488,7 @@ export function PipelineList({
           </thead>
           <tbody className="divide-y">
             {processed.length === 0 ? (
-              <tr><td colSpan={6} className="px-4 py-12 text-center text-xs text-muted-foreground">Aucun candidat correspondant aux filtres</td></tr>
+              <tr><td colSpan={7} className="px-4 py-12 text-center text-xs text-muted-foreground">Aucun candidat correspondant aux filtres</td></tr>
             ) : processed.map((c) => {
               const nextDate = formatDate(c.nextTaskAt);
               return (
@@ -480,6 +500,24 @@ export function PipelineList({
                   </td>
                   <td className="px-4 py-2.5">
                     <StatusCell candidate={c} onStatusChange={onStatusChange} />
+                  </td>
+                  <td className="px-4 py-2.5 max-w-[220px]">
+                    {c.needMatchings.length === 0 ? (
+                      <span className="text-xs text-muted-foreground/40">—</span>
+                    ) : (
+                      <div className="flex flex-wrap gap-1">
+                        {c.needMatchings.slice(0, 3).map((m, i) => (
+                          <span key={i} className={cn("inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full", PROP_CHIP[m.propositionStatus] ?? "bg-muted text-muted-foreground")}>
+                            <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", PROP_DOT[m.propositionStatus] ?? "bg-gray-400")} />
+                            <span className="truncate max-w-[80px]">{m.needTitle}</span>
+                            · {PROP_SHORT[m.propositionStatus] ?? m.propositionStatus}
+                          </span>
+                        ))}
+                        {c.needMatchings.length > 3 && (
+                          <span className="text-[10px] text-muted-foreground self-center">+{c.needMatchings.length - 3}</span>
+                        )}
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-2.5 max-w-[200px]">
                     <CursusCell candidate={c} cursus={cursus} />

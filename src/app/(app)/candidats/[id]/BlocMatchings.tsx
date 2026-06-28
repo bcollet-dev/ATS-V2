@@ -21,9 +21,9 @@ import {
 
 const PROP_LABELS: Record<string, string> = {
   cv_sent:      "CV envoyé",
-  interview:    "Entretien",
-  waiting_fre:  "Attente FRE",
-  placed:       "Placé",
+  interview:    "Entretien prévu",
+  waiting_fre:  "Retenu",
+  placed:       "Retenu",
   not_retained: "Non retenu",
 };
 
@@ -31,7 +31,7 @@ const PROP_BADGE: Record<string, string> = {
   cv_sent:      "bg-blue-100 text-blue-700",
   interview:    "bg-orange-100 text-orange-700",
   waiting_fre:  "bg-amber-100 text-amber-700",
-  placed:       "bg-emerald-100 text-emerald-700",
+  placed:       "bg-amber-100 text-amber-700",
   not_retained: "bg-gray-100 text-gray-600",
 };
 
@@ -39,15 +39,14 @@ const PROP_DOT: Record<string, string> = {
   cv_sent:      "bg-blue-400",
   interview:    "bg-orange-400",
   waiting_fre:  "bg-amber-400",
-  placed:       "bg-emerald-400",
+  placed:       "bg-amber-400",
   not_retained: "bg-gray-400",
 };
 
 const PIPELINE_STATUSES = [
   { key: "cv_sent",      label: "CV envoyé" },
-  { key: "interview",    label: "Entretien" },
-  { key: "waiting_fre",  label: "Attente FRE" },
-  { key: "placed",       label: "Placé" },
+  { key: "interview",    label: "Entretien prévu" },
+  { key: "waiting_fre",  label: "Retenu" },
   { key: "not_retained", label: "Non retenu" },
 ];
 

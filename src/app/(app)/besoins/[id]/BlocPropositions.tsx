@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useTransition, useOptimistic } from "react";
 import Link from "next/link";
-import { Plus, Trash2, Trophy, Lock, Check, Search } from "lucide-react";
+import { Plus, Trash2, Trophy, Lock, Check, Search, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Modal, ModalContent, ModalHeader, ModalTitle, ModalBody, ModalFooter } from "@/components/ui/modal";
@@ -21,9 +21,9 @@ import {
 
 const PROP_LABELS: Record<string, string> = {
   cv_sent:      "CV envoyé",
-  interview:    "Entretien",
-  waiting_fre:  "Attente FRE",
-  placed:       "Placé",
+  interview:    "Entretien prévu",
+  waiting_fre:  "Retenu",
+  placed:       "Retenu",
   not_retained: "Non retenu",
 };
 
@@ -31,7 +31,7 @@ const PROP_BADGE: Record<string, string> = {
   cv_sent:      "bg-blue-100 text-blue-700",
   interview:    "bg-orange-100 text-orange-700",
   waiting_fre:  "bg-amber-100 text-amber-700",
-  placed:       "bg-emerald-100 text-emerald-700",
+  placed:       "bg-amber-100 text-amber-700",
   not_retained: "bg-gray-100 text-gray-600",
 };
 
@@ -39,17 +39,20 @@ const PROP_DOT: Record<string, string> = {
   cv_sent:      "bg-blue-400",
   interview:    "bg-orange-400",
   waiting_fre:  "bg-amber-400",
-  placed:       "bg-emerald-400",
+  placed:       "bg-amber-400",
   not_retained: "bg-gray-400",
 };
 
 const PIPELINE_STATUSES = [
   { key: "cv_sent",      label: "CV envoyé" },
-  { key: "interview",    label: "Entretien" },
-  { key: "waiting_fre",  label: "Attente FRE" },
-  { key: "placed",       label: "Placé" },
+  { key: "interview",    label: "Entretien prévu" },
+  { key: "waiting_fre",  label: "Retenu" },
   { key: "not_retained", label: "Non retenu" },
 ];
+
+const MATCHING_ALLOWED_STATUSES = new Set([
+  "need_in_progress", "interview", "waiting_fre", "client", "rupture",
+]);
 
 // ─── Status Picker ────────────────────────────────────────────────────────────
 
@@ -267,10 +270,12 @@ function RefusalModal({
 
 export function BlocPropositions({
   needId,
+  needStatus,
   initialMatchings,
   availableCandidates,
 }: {
   needId: string;
+  needStatus: string;
   initialMatchings: MatchingForNeed[];
   availableCandidates: CandidateOption[];
 }) {
@@ -373,18 +378,27 @@ export function BlocPropositions({
             {matchings.length}
           </span>
         </h2>
-        <Button size="sm" variant="outline" className="gap-1.5 h-7 text-xs" onClick={() => setAddOpen(true)}>
-          <Plus className="h-3.5 w-3.5" />
-          Proposer un candidat
-        </Button>
+        {MATCHING_ALLOWED_STATUSES.has(needStatus) ? (
+          <Button size="sm" variant="outline" className="gap-1.5 h-7 text-xs" onClick={() => setAddOpen(true)}>
+            <Plus className="h-3.5 w-3.5" />
+            Proposer un candidat
+          </Button>
+        ) : needStatus !== "lost" ? (
+          <p className="flex items-center gap-1 text-xs text-muted-foreground">
+            <Info className="h-3 w-3 shrink-0" />
+            Disponible à partir de &quot;Besoin en cours&quot;
+          </p>
+        ) : null}
       </div>
 
       {matchings.length === 0 ? (
         <div className="px-5 py-10 text-center">
           <p className="text-sm text-muted-foreground">Aucun candidat proposé sur ce besoin.</p>
-          <button onClick={() => setAddOpen(true)} className="mt-2 text-sm text-primary hover:underline">
-            Proposer le premier candidat
-          </button>
+          {MATCHING_ALLOWED_STATUSES.has(needStatus) && (
+            <button onClick={() => setAddOpen(true)} className="mt-2 text-sm text-primary hover:underline">
+              Proposer le premier candidat
+            </button>
+          )}
         </div>
       ) : (
         <div className="divide-y">

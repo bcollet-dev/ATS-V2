@@ -2,8 +2,8 @@
 
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/db";
-import { needs, companies, cursus, profiles, tasks } from "@/db/schema";
-import { eq, isNull, and, asc, inArray } from "drizzle-orm";
+import { needs, companies, cursus, profiles, tasks, matchings, candidates } from "@/db/schema";
+import { eq, isNull, and, asc, inArray, notInArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -14,6 +14,13 @@ const createNeedSchema = z.object({
   city: z.string().optional(),
   positionsCount: z.coerce.number().int().min(1).default(1),
   ownerId: z.string().optional(),
+  task: z.object({
+    category: z.enum(["call", "email", "document", "follow_up", "interview", "other", "video_interview", "onsite_interview", "administrative"]),
+    title: z.string().min(1, "Titre de la tâche requis"),
+    assignedTo: z.string().min(1, "Responsable requis"),
+    dueAt: z.string().optional(),
+    notes: z.string().optional(),
+  }),
 });
 
 export type CreateNeedInput = z.infer<typeof createNeedSchema>;
@@ -27,7 +34,7 @@ export async function createNeed(input: CreateNeedInput): Promise<CreateNeedResu
   const parsed = createNeedSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: parsed.error.errors[0].message };
 
-  const { companyId, title, targetCursusId, city, positionsCount, ownerId } = parsed.data;
+  const { companyId, title, targetCursusId, city, positionsCount, ownerId, task } = parsed.data;
 
   const [created] = await db
     .insert(needs)
@@ -40,6 +47,19 @@ export async function createNeed(input: CreateNeedInput): Promise<CreateNeedResu
       ownerId: ownerId || null,
     })
     .returning({ id: needs.id, title: needs.title });
+
+  // Create premier-contact task (non-fatal if fails)
+  try {
+    const dueAt = task.dueAt ? new Date(task.dueAt) : new Date();
+    await db.insert(tasks).values({
+      needId: created.id,
+      title: task.title,
+      category: task.category as never,
+      assignedTo: task.assignedTo || null,
+      dueAt,
+      description: task.notes || null,
+    });
+  } catch { /* task creation failure is non-fatal */ }
 
   revalidatePath("/besoins");
   return { success: true, data: created };
@@ -61,6 +81,10 @@ export type NeedRow = {
   updatedAt: string;
   isInactive: boolean;
   nextTaskOverdue: boolean;
+  activeMatchingsCount: number;
+  waitingFreCandidatesCount: number;
+  interviewCandidatesCount: number;
+  needCandidates: Array<{ matchingId: string; candidateId: string; firstName: string; propositionStatus: string; isFrozen: boolean }>;
 };
 
 export async function loadPipelineNeeds(): Promise<NeedRow[]> {
@@ -92,17 +116,67 @@ export async function loadPipelineNeeds(): Promise<NeedRow[]> {
 
   const needIds = rows.map((r) => r.id);
 
-  const nextTaskRows = await db
-    .select({ needId: tasks.needId, dueAt: tasks.dueAt })
-    .from(tasks)
-    .where(
-      and(
-        inArray(tasks.needId, needIds),
-        isNull(tasks.completedAt),
-        isNull(tasks.deletedAt),
+  const [nextTaskRows, activeCountRows, waitingFreCountRows, interviewCountRows, candidateRows] = await Promise.all([
+    db
+      .select({ needId: tasks.needId, dueAt: tasks.dueAt })
+      .from(tasks)
+      .where(
+        and(
+          inArray(tasks.needId, needIds),
+          isNull(tasks.completedAt),
+          isNull(tasks.deletedAt),
+        )
       )
-    )
-    .orderBy(asc(tasks.dueAt));
+      .orderBy(asc(tasks.dueAt)),
+    db
+      .select({ needId: matchings.needId, count: sql<number>`count(*)::int` })
+      .from(matchings)
+      .where(
+        and(
+          inArray(matchings.needId, needIds),
+          notInArray(matchings.propositionStatus, ["not_retained"]),
+        )
+      )
+      .groupBy(matchings.needId),
+    db
+      .select({ needId: matchings.needId, count: sql<number>`count(*)::int` })
+      .from(matchings)
+      .where(
+        and(
+          inArray(matchings.needId, needIds),
+          eq(matchings.propositionStatus, "waiting_fre"),
+        )
+      )
+      .groupBy(matchings.needId),
+    db
+      .select({ needId: matchings.needId, count: sql<number>`count(*)::int` })
+      .from(matchings)
+      .where(
+        and(
+          inArray(matchings.needId, needIds),
+          eq(matchings.propositionStatus, "interview"),
+        )
+      )
+      .groupBy(matchings.needId),
+    db
+      .select({
+        needId: matchings.needId,
+        matchingId: matchings.id,
+        candidateId: matchings.candidateId,
+        firstName: candidates.firstName,
+        propositionStatus: matchings.propositionStatus,
+        isFrozen: matchings.isFrozen,
+      })
+      .from(matchings)
+      .innerJoin(candidates, eq(matchings.candidateId, candidates.id))
+      .where(
+        and(
+          inArray(matchings.needId, needIds),
+          notInArray(matchings.propositionStatus, ["not_retained"]),
+        )
+      )
+      .orderBy(asc(matchings.createdAt)),
+  ]);
 
   const nextTaskMap = new Map<string, string>();
   for (const t of nextTaskRows) {
@@ -110,6 +184,17 @@ export async function loadPipelineNeeds(): Promise<NeedRow[]> {
       nextTaskMap.set(t.needId, t.dueAt.toISOString());
     }
   }
+
+  const candidatesByNeed = new Map<string, Array<{ matchingId: string; candidateId: string; firstName: string; propositionStatus: string; isFrozen: boolean }>>();
+  for (const r of candidateRows) {
+    const nid = r.needId as string;
+    if (!candidatesByNeed.has(nid)) candidatesByNeed.set(nid, []);
+    candidatesByNeed.get(nid)!.push({ matchingId: r.matchingId, candidateId: r.candidateId, firstName: r.firstName, propositionStatus: r.propositionStatus, isFrozen: r.isFrozen });
+  }
+
+  const activeCountMap = new Map(activeCountRows.map((r) => [r.needId as string, Number(r.count)]));
+  const waitingFreCountMap = new Map(waitingFreCountRows.map((r) => [r.needId as string, Number(r.count)]));
+  const interviewCountMap = new Map(interviewCountRows.map((r) => [r.needId as string, Number(r.count)]));
 
   const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
 
@@ -135,6 +220,10 @@ export async function loadPipelineNeeds(): Promise<NeedRow[]> {
       updatedAt,
       isInactive: inactive,
       nextTaskOverdue: !!nextTaskAt && new Date(nextTaskAt) < new Date(),
+      needCandidates: candidatesByNeed.get(r.id) ?? [],
+      activeMatchingsCount: activeCountMap.get(r.id) ?? 0,
+      waitingFreCandidatesCount: waitingFreCountMap.get(r.id) ?? 0,
+      interviewCandidatesCount: interviewCountMap.get(r.id) ?? 0,
     };
   });
 }
@@ -149,6 +238,21 @@ export async function updateNeedStatus(id: string, status: string, lostReason?: 
       ...(lostReason !== undefined ? { lostReason } : {}),
     })
     .where(eq(needs.id, id));
+
+  if (status === "lost") {
+    // Cascade: mark all active matchings as not_retained
+    await db
+      .update(matchings)
+      .set({ propositionStatus: "not_retained", updatedAt: new Date() })
+      .where(
+        and(
+          eq(matchings.needId, id),
+          notInArray(matchings.propositionStatus, ["not_retained"])
+        )
+      );
+    revalidatePath("/candidats");
+  }
+
   revalidatePath("/besoins");
 }
 

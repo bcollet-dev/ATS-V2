@@ -3,7 +3,7 @@
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/db";
 import { matchings, candidates, needs, companies, cursus } from "@/db/schema";
-import { eq, isNull, and, asc, notInArray } from "drizzle-orm";
+import { eq, isNull, and, asc, notInArray, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -199,6 +199,57 @@ export async function loadAvailableNeedsForCandidate(candidateId: string): Promi
   }));
 }
 
+// ─── Auto-sync besoin status ─────────────────────────────────────────────────
+
+// Statuts besoin éligibles au recalcul automatique (les autres sont positionnés manuellement)
+const SYNC_ALLOWED_NEED_STATUSES = new Set(["need_in_progress", "interview", "waiting_fre"]);
+
+export async function syncNeedStatusFromMatchings(needId: string): Promise<void> {
+  const [needRow] = await db
+    .select({ status: needs.status })
+    .from(needs)
+    .where(eq(needs.id, needId));
+
+  if (!needRow || !SYNC_ALLOWED_NEED_STATUSES.has(needRow.status)) return;
+
+  // If a winner (placed) already exists, don't auto-sync to avoid downgrading the need
+  const [winner] = await db
+    .select({ id: matchings.id })
+    .from(matchings)
+    .where(and(eq(matchings.needId, needId), eq(matchings.propositionStatus, "placed")))
+    .limit(1);
+  if (winner) return;
+
+  // Active propositions: not eliminated, not placed, not frozen
+  const actives = await db
+    .select({ propositionStatus: matchings.propositionStatus })
+    .from(matchings)
+    .where(
+      and(
+        eq(matchings.needId, needId),
+        notInArray(matchings.propositionStatus, ["not_retained", "placed"]),
+        eq(matchings.isFrozen, false)
+      )
+    );
+
+  let targetStatus: string;
+  if (actives.some((m) => m.propositionStatus === "waiting_fre")) {
+    targetStatus = "waiting_fre";
+  } else if (actives.some((m) => m.propositionStatus === "interview")) {
+    targetStatus = "interview";
+  } else {
+    targetStatus = "need_in_progress";
+  }
+
+  if (targetStatus !== needRow.status) {
+    await db
+      .update(needs)
+      .set({ status: targetStatus as never, updatedAt: new Date() })
+      .where(eq(needs.id, needId));
+    revalidatePath("/besoins");
+  }
+}
+
 // ─── Mutations ────────────────────────────────────────────────────────────────
 
 type CreateResult =
@@ -237,6 +288,13 @@ export async function updateMatchingStatus(
       ...(refusalReason !== undefined ? { refusalReason } : {}),
     })
     .where(eq(matchings.id, id));
+
+  const [row] = await db
+    .select({ needId: matchings.needId })
+    .from(matchings)
+    .where(eq(matchings.id, id));
+  if (row) await syncNeedStatusFromMatchings(row.needId);
+
   revalidatePath("/besoins");
   revalidatePath("/candidats");
 }
@@ -274,7 +332,13 @@ export async function markMatchingWinner(matchingId: string): Promise<void> {
 
 export async function deleteMatching(id: string): Promise<void> {
   await requireAuth();
+  // Capture needId before deletion so we can sync after
+  const [row] = await db
+    .select({ needId: matchings.needId })
+    .from(matchings)
+    .where(eq(matchings.id, id));
   await db.delete(matchings).where(eq(matchings.id, id));
+  if (row) await syncNeedStatusFromMatchings(row.needId);
   revalidatePath("/besoins");
   revalidatePath("/candidats");
 }

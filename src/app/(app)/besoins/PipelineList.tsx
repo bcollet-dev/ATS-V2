@@ -18,7 +18,7 @@ import {
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const STATUS_LABELS: Record<string, string> = {
-  ad_chase:         "À démarcher",
+  ad_chase:         "Ad Chase",
   prospect:         "Prospect",
   need_in_progress: "Besoin en cours",
   interview:        "Entretien",
@@ -50,8 +50,27 @@ const STATUS_DOT: Record<string, string> = {
   lost:             "bg-gray-400",
 };
 
+const PROP_DOT: Record<string, string> = {
+  cv_sent:     "bg-blue-400",
+  interview:   "bg-orange-400",
+  waiting_fre: "bg-amber-400",
+  placed:      "bg-amber-400",
+};
+const PROP_CHIP: Record<string, string> = {
+  cv_sent:     "bg-blue-50 text-blue-700",
+  interview:   "bg-orange-50 text-orange-700",
+  waiting_fre: "bg-amber-50 text-amber-700",
+  placed:      "bg-amber-50 text-amber-700",
+};
+const PROP_SHORT: Record<string, string> = {
+  cv_sent:     "CV",
+  interview:   "Entretien",
+  waiting_fre: "Retenu",
+  placed:      "Retenu ★",
+};
+
 const PIPELINE_STATUSES = [
-  { key: "ad_chase",         label: "À démarcher" },
+  { key: "ad_chase",         label: "Ad Chase" },
   { key: "prospect",         label: "Prospect" },
   { key: "need_in_progress", label: "Besoin en cours" },
   { key: "interview",        label: "Entretien" },
@@ -498,6 +517,7 @@ export function PipelineList({
               <SortHeader col="title"   label="Besoin"    sort={sort} onSort={(k, d) => setSort({ key: k, dir: d })} />
               <SortHeader col="company" label="Entreprise" sort={sort} onSort={(k, d) => setSort({ key: k, dir: d })} />
               <ColHeader  col="status"  label="Étape"      allValues={allValues.get("status") ?? []}  filters={filters} onFilters={handleFilters} sort={sort} onSort={(k, d) => setSort({ key: k, dir: d })} />
+              <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Candidats</th>
               <ColHeader  col="cursus"  label="Cursus"     allValues={allValues.get("cursus") ?? []}  filters={filters} onFilters={handleFilters} sort={sort} onSort={(k, d) => setSort({ key: k, dir: d })} />
               <ColHeader  col="city"    label="Ville"      allValues={allValues.get("city") ?? []}    filters={filters} onFilters={handleFilters} sort={sort} onSort={(k, d) => setSort({ key: k, dir: d })} />
               <ColHeader  col="owner"   label="Recruteur"  allValues={allValues.get("owner") ?? []}   filters={filters} onFilters={handleFilters} sort={sort} onSort={(k, d) => setSort({ key: k, dir: d })} />
@@ -507,8 +527,8 @@ export function PipelineList({
           </thead>
           <tbody className="divide-y">
             {processed.length === 0 ? (
-              <tr><td colSpan={8} className="px-4 py-12 text-center text-xs text-muted-foreground">Aucun besoin correspondant aux filtres</td></tr>
-            ) : processed.map((n) => {
+              <tr><td colSpan={9} className="px-4 py-12 text-center text-xs text-muted-foreground">Aucun besoin correspondant aux filtres</td></tr>
+) : processed.map((n) => {
               const nextDate = formatDate(n.nextTaskAt);
               return (
                 <tr key={n.id} className="hover:bg-muted/30 transition-colors">
@@ -525,6 +545,23 @@ export function PipelineList({
                   </td>
                   <td className="px-4 py-2.5">
                     <StatusCell need={n} onStatusChange={onStatusChange} />
+                  </td>
+                  <td className="px-4 py-2.5 max-w-[220px]">
+                    {n.needCandidates.length === 0 ? (
+                      <span className="text-xs text-muted-foreground/40">—</span>
+                    ) : (
+                      <div className="flex flex-wrap gap-1">
+                        {n.needCandidates.slice(0, 4).map((c, i) => (
+                          <span key={i} className={cn("inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full", PROP_CHIP[c.propositionStatus] ?? "bg-muted text-muted-foreground")}>
+                            <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", PROP_DOT[c.propositionStatus] ?? "bg-gray-400")} />
+                            {c.firstName} · {PROP_SHORT[c.propositionStatus] ?? c.propositionStatus}
+                          </span>
+                        ))}
+                        {n.needCandidates.length > 4 && (
+                          <span className="text-[10px] text-muted-foreground self-center">+{n.needCandidates.length - 4}</span>
+                        )}
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-2.5 max-w-[180px]">
                     <CursusCell need={n} cursus={cursus} />
@@ -563,7 +600,7 @@ export function PipelineList({
                         <DropdownMenuContent side="bottom" align="end">
                           <DropdownMenuGroup>
                             <DropdownMenuLabel>Remettre dans pipeline</DropdownMenuLabel>
-                            <DropdownMenuItem onClick={() => onStatusChange(n.id, "ad_chase")}>À démarcher</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => onStatusChange(n.id, "ad_chase")}>Ad Chase</DropdownMenuItem>
                             <DropdownMenuItem onClick={() => onStatusChange(n.id, "prospect")}>Prospect</DropdownMenuItem>
                           </DropdownMenuGroup>
                         </DropdownMenuContent>
