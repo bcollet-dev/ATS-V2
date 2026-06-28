@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { navItems, adminNavItems } from "./nav-items";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -14,8 +15,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Pencil } from "lucide-react";
 import { signOut } from "@/app/(auth)/login/actions";
 import { NotificationBell } from "./NotificationBell";
+import { EditNameModal } from "@/app/(app)/onboarding/EditNameModal";
 import type { profiles } from "@/db/schema";
 import type { InferSelectModel } from "drizzle-orm";
 
@@ -40,6 +43,7 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   const isAdmin = user.role === "admin" || user.role === "direction";
+  const [editNameOpen, setEditNameOpen] = useState(false);
 
   const initials = user.fullName
     .split(" ")
@@ -118,8 +122,17 @@ export function AppShell({
                   {initials}
                 </AvatarFallback>
               </Avatar>
-              <div className="flex-1 text-left min-w-0">
-                <p className="text-xs font-medium truncate">{user.fullName}</p>
+              <div className="flex-1 text-left min-w-0 group/name">
+                <div className="flex items-center gap-1">
+                  <p className="text-xs font-medium truncate">{user.fullName}</p>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setEditNameOpen(true); }}
+                    className="opacity-0 group-hover/name:opacity-100 transition-opacity rounded p-0.5 hover:bg-sidebar-accent"
+                  >
+                    <Pencil className="h-2.5 w-2.5 text-muted-foreground" />
+                  </button>
+                </div>
                 <p className="text-xs text-muted-foreground truncate">
                   {ROLE_LABELS[user.role]}
                 </p>
@@ -148,6 +161,12 @@ export function AppShell({
       <main className="flex-1 overflow-y-auto">
         {children}
       </main>
+
+      <EditNameModal
+        open={editNameOpen}
+        onClose={() => setEditNameOpen(false)}
+        currentName={user.fullName}
+      />
     </div>
   );
 }

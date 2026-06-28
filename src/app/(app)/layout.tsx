@@ -4,6 +4,7 @@ import { notifications } from "@/db/schema";
 import { eq, isNull, and, count } from "drizzle-orm";
 import { AppShell } from "@/components/shell/app-shell";
 import { NotificationListener } from "@/components/shell/NotificationListener";
+import { ConfirmNameModal } from "./onboarding/ConfirmNameModal";
 
 export default async function AppLayout({
   children,
@@ -26,6 +27,7 @@ export default async function AppLayout({
   return (
     <AppShell user={user} unreadCount={unreadCount}>
       <NotificationListener userId={user.id} />
+      {!user.nameConfirmed && <ConfirmNameModal defaultName={user.fullName} />}
       {children}
     </AppShell>
   );
