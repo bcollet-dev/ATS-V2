@@ -8,6 +8,7 @@ import { updateNeedStatus, type NeedRow } from "./actions";
 import { KanbanPipeline } from "./KanbanPipeline";
 import { PipelineList } from "./PipelineList";
 import { RuptureModal } from "./RuptureModal";
+import { NeedDrawer } from "./NeedDrawer";
 
 const ARCHIVED = new Set(["rupture"]);
 type ViewMode = "kanban" | "list";
@@ -17,13 +18,16 @@ export function PipelineClient({
   needs: initial,
   cursus,
   profiles,
+  companies,
 }: {
   needs: NeedRow[];
   cursus: { id: string; name: string }[];
   profiles: { id: string; fullName: string }[];
+  companies: { id: string; name: string }[];
 }) {
   const [tab, setTab] = useState<Tab>("pipeline");
   const [view, setView] = useState<ViewMode>("kanban");
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [rupturePending, setRupturePending] = useState<{ id: string } | null>(null);
   const [, startTransition] = useTransition();
 
@@ -70,7 +74,7 @@ export function PipelineClient({
             {pipeline.length} actif{pipeline.length !== 1 ? "s" : ""} · {archives.length} rupture{archives.length !== 1 ? "s" : ""}
           </p>
         </div>
-        <Button size="sm" className="gap-1.5" disabled>
+        <Button size="sm" className="gap-1.5" onClick={() => setDrawerOpen(true)}>
           <Plus className="h-3.5 w-3.5" />
           Nouveau besoin
         </Button>
@@ -147,6 +151,14 @@ export function PipelineClient({
           <PipelineList needs={archives} onStatusChange={handleStatusChange} cursus={cursus} profiles={profiles} archived />
         )}
       </div>
+
+      <NeedDrawer
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+        companies={companies}
+        cursus={cursus}
+        profiles={profiles}
+      />
 
       <RuptureModal
         open={!!rupturePending}

@@ -5,6 +5,45 @@ import { db } from "@/db";
 import { needs, companies, cursus, profiles, tasks } from "@/db/schema";
 import { eq, isNull, and, asc, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
+
+const createNeedSchema = z.object({
+  companyId: z.string().uuid("Entreprise requise"),
+  title: z.string().min(1, "Le titre est requis"),
+  targetCursusId: z.string().optional(),
+  city: z.string().optional(),
+  positionsCount: z.coerce.number().int().min(1).default(1),
+  ownerId: z.string().optional(),
+});
+
+export type CreateNeedInput = z.infer<typeof createNeedSchema>;
+
+type CreateNeedResult =
+  | { success: true; data: { id: string; title: string } }
+  | { success: false; error: string };
+
+export async function createNeed(input: CreateNeedInput): Promise<CreateNeedResult> {
+  await requireAuth();
+  const parsed = createNeedSchema.safeParse(input);
+  if (!parsed.success) return { success: false, error: parsed.error.errors[0].message };
+
+  const { companyId, title, targetCursusId, city, positionsCount, ownerId } = parsed.data;
+
+  const [created] = await db
+    .insert(needs)
+    .values({
+      companyId,
+      title,
+      targetCursusId: targetCursusId || null,
+      city: city?.trim() || null,
+      positionsCount,
+      ownerId: ownerId || null,
+    })
+    .returning({ id: needs.id, title: needs.title });
+
+  revalidatePath("/besoins");
+  return { success: true, data: created };
+}
 
 export type NeedRow = {
   id: string;
