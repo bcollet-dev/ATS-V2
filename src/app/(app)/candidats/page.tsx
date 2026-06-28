@@ -10,9 +10,5 @@ export default async function CandidatsPage() {
     getActiveCursus(),
   ]);
 
-  return (
-    <div className="flex flex-col h-full">
-      <PipelineClient candidates={candidates} cursus={cursus} />
-    </div>
-  );
+  return <PipelineClient candidates={candidates} cursus={cursus} />;
 }

@@ -169,14 +169,13 @@ function DraggableCard({
   onStatusChange: (id: string, status: string) => void;
   isGhost: boolean;
 }) {
-  const { attributes, listeners, setNodeRef, transform } = useDraggable({ id: candidate.id });
+  const { listeners, setNodeRef, transform } = useDraggable({ id: candidate.id });
   const style = transform ? { transform: CSS.Translate.toString(transform) } : undefined;
 
   return (
     <div
       ref={setNodeRef}
       style={style}
-      {...attributes}
       {...listeners}
       className={cn("cursor-grab active:cursor-grabbing", isGhost && "opacity-30")}
     >
