@@ -166,32 +166,35 @@ export function PipelineList({
                       </DropdownMenuTrigger>
                       <DropdownMenuContent side="bottom" align="end">
                         {archived ? (
-                          <>
+                          <DropdownMenuGroup>
                             <DropdownMenuLabel>Remettre dans pipeline</DropdownMenuLabel>
-                            <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={() => onStatusChange(c.id, "to_call")}>
                               À appeler
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => onStatusChange(c.id, "in_progress")}>
                               En cours
                             </DropdownMenuItem>
-                          </>
+                          </DropdownMenuGroup>
                         ) : (
                           <>
-                            <DropdownMenuLabel>Changer d'étape</DropdownMenuLabel>
+                            <DropdownMenuGroup>
+                              <DropdownMenuLabel>Changer d'étape</DropdownMenuLabel>
+                              {ACTIVE_STATUSES.filter((s) => s.key !== c.status).map((s) => (
+                                <DropdownMenuItem key={s.key} onClick={() => onStatusChange(c.id, s.key)}>
+                                  {s.label}
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuGroup>
                             <DropdownMenuSeparator />
-                            {ACTIVE_STATUSES.filter((s) => s.key !== c.status).map((s) => (
-                              <DropdownMenuItem key={s.key} onClick={() => onStatusChange(c.id, s.key)}>
-                                {s.label}
+                            <DropdownMenuGroup>
+                              <DropdownMenuLabel>Archiver</DropdownMenuLabel>
+                              <DropdownMenuItem onClick={() => onStatusChange(c.id, "temporary_refusal")}>
+                                Refus temporaire
                               </DropdownMenuItem>
-                            ))}
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => onStatusChange(c.id, "temporary_refusal")}>
-                              Refus temporaire
-                            </DropdownMenuItem>
-                            <DropdownMenuItem variant="destructive" onClick={() => onStatusChange(c.id, "definitive_refusal")}>
-                              Refus définitif
-                            </DropdownMenuItem>
+                              <DropdownMenuItem variant="destructive" onClick={() => onStatusChange(c.id, "definitive_refusal")}>
+                                Refus définitif
+                              </DropdownMenuItem>
+                            </DropdownMenuGroup>
                           </>
                         )}
                       </DropdownMenuContent>

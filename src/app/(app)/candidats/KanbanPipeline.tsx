@@ -103,28 +103,31 @@ function CandidatCard({
             <MoreHorizontal className="h-3.5 w-3.5" />
           </DropdownMenuTrigger>
           <DropdownMenuContent side="bottom" align="end">
-            <DropdownMenuLabel>Changer d'étape</DropdownMenuLabel>
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>Changer d'étape</DropdownMenuLabel>
+              {ACTIVE_STATUSES.filter((s) => s.key !== candidate.status).map((s) => (
+                <DropdownMenuItem
+                  key={s.key}
+                  onClick={(e) => { e.stopPropagation(); onStatusChange(candidate.id, s.key); }}
+                >
+                  <span className={cn("h-2 w-2 rounded-full shrink-0", STATUS_STYLES[s.key].dot)} />
+                  {s.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            {ACTIVE_STATUSES.filter((s) => s.key !== candidate.status).map((s) => (
-              <DropdownMenuItem
-                key={s.key}
-                onClick={(e) => { e.stopPropagation(); onStatusChange(candidate.id, s.key); }}
-              >
-                <span className={cn("h-2 w-2 rounded-full shrink-0", STATUS_STYLES[s.key].dot)} />
-                {s.label}
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>Archiver</DropdownMenuLabel>
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onStatusChange(candidate.id, "temporary_refusal"); }}>
+                Refus temporaire
               </DropdownMenuItem>
-            ))}
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel>Archiver</DropdownMenuLabel>
-            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onStatusChange(candidate.id, "temporary_refusal"); }}>
-              Refus temporaire
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              variant="destructive"
-              onClick={(e) => { e.stopPropagation(); onStatusChange(candidate.id, "definitive_refusal"); }}
-            >
-              Refus définitif
-            </DropdownMenuItem>
+              <DropdownMenuItem
+                variant="destructive"
+                onClick={(e) => { e.stopPropagation(); onStatusChange(candidate.id, "definitive_refusal"); }}
+              >
+                Refus définitif
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
