@@ -130,11 +130,11 @@ export default async function CandidatPage({
   return (
     <div className="p-6 max-w-5xl">
       <Link
-        href="/annuaire"
+        href="/candidats"
         className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-6 w-fit"
       >
         <ArrowLeft className="h-4 w-4" />
-        Retour à l'annuaire
+        Retour au pipeline
       </Link>
 
       <div className="flex items-start justify-between mb-6">
