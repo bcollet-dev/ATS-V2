@@ -4,15 +4,76 @@ import { useState, useTransition, useOptimistic } from "react";
 import { Briefcase, Archive, LayoutGrid, List, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { Modal, ModalContent, ModalHeader, ModalTitle, ModalBody, ModalFooter } from "@/components/ui/modal";
+import { Label } from "@/components/ui/label";
 import { updateNeedStatus, type NeedRow } from "./actions";
 import { KanbanPipeline } from "./KanbanPipeline";
 import { PipelineList } from "./PipelineList";
-import { RuptureModal } from "./RuptureModal";
 import { NeedDrawer } from "./NeedDrawer";
 
-const ARCHIVED = new Set(["rupture"]);
+const ARCHIVED = new Set(["lost"]);
 type ViewMode = "kanban" | "list";
 type Tab = "pipeline" | "archives";
+
+// Statuts nécessitant un motif
+const REASON_REQUIRED = new Set(["rupture", "lost"]);
+
+function LostModal({
+  open,
+  needTitle,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean;
+  needTitle: string;
+  onConfirm: (reason: string) => void;
+  onCancel: () => void;
+}) {
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState(false);
+
+  function handleConfirm() {
+    if (!reason.trim()) { setError(true); return; }
+    const val = reason.trim();
+    setReason(""); setError(false);
+    onConfirm(val);
+  }
+
+  function handleCancel() {
+    setReason(""); setError(false); onCancel();
+  }
+
+  return (
+    <Modal open={open} onOpenChange={(o) => { if (!o) handleCancel(); }}>
+      <ModalContent className="max-w-md">
+        <ModalHeader>
+          <ModalTitle className="text-destructive">Besoin perdu</ModalTitle>
+        </ModalHeader>
+        <ModalBody className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Motif de perte pour <span className="font-medium text-foreground">{needTitle}</span>
+          </p>
+          <div className="space-y-1.5">
+            <Label htmlFor="lost-reason">Motif <span className="text-destructive">*</span></Label>
+            <textarea
+              id="lost-reason"
+              value={reason}
+              onChange={(e) => { setReason(e.target.value); setError(false); }}
+              placeholder="Ex : poste pourvu en interne, budget gelé, concurrence…"
+              className="flex min-h-[96px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
+              autoFocus
+            />
+            {error && <p className="text-xs text-destructive">Le motif est obligatoire.</p>}
+          </div>
+        </ModalBody>
+        <ModalFooter>
+          <Button variant="outline" onClick={handleCancel}>Annuler</Button>
+          <Button variant="destructive" onClick={handleConfirm}>Confirmer</Button>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
+  );
+}
 
 export function PipelineClient({
   needs: initial,
@@ -28,7 +89,7 @@ export function PipelineClient({
   const [tab, setTab] = useState<Tab>("pipeline");
   const [view, setView] = useState<ViewMode>("kanban");
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [rupturePending, setRupturePending] = useState<{ id: string } | null>(null);
+  const [pending, setPending] = useState<{ id: string; status: string } | null>(null);
   const [, startTransition] = useTransition();
 
   const [needs, setOptimistic] = useOptimistic(
@@ -40,12 +101,12 @@ export function PipelineClient({
   const pipeline = needs.filter((n) => !ARCHIVED.has(n.status));
   const archives = needs.filter((n) => ARCHIVED.has(n.status));
 
-  const ruptureNeed = rupturePending ? needs.find((n) => n.id === rupturePending.id) : null;
-  const ruptureTitle = ruptureNeed ? `${ruptureNeed.title} — ${ruptureNeed.companyName}` : "";
+  const pendingNeed = pending ? needs.find((n) => n.id === pending.id) : null;
+  const pendingTitle = pendingNeed ? `${pendingNeed.title} — ${pendingNeed.companyName}` : "";
 
   function handleStatusChange(id: string, status: string) {
-    if (status === "rupture") {
-      setRupturePending({ id });
+    if (REASON_REQUIRED.has(status)) {
+      setPending({ id, status });
       return;
     }
     startTransition(async () => {
@@ -54,13 +115,13 @@ export function PipelineClient({
     });
   }
 
-  function handleRuptureConfirm(reason: string) {
-    if (!rupturePending) return;
-    const { id } = rupturePending;
-    setRupturePending(null);
+  function handleConfirm(reason: string) {
+    if (!pending) return;
+    const { id, status } = pending;
+    setPending(null);
     startTransition(async () => {
-      setOptimistic({ id, status: "rupture" });
-      await updateNeedStatus(id, "rupture", reason);
+      setOptimistic({ id, status });
+      await updateNeedStatus(id, status, reason);
     });
   }
 
@@ -71,7 +132,7 @@ export function PipelineClient({
         <div className="flex-1">
           <h1 className="text-2xl font-semibold">Besoins</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {pipeline.length} actif{pipeline.length !== 1 ? "s" : ""} · {archives.length} rupture{archives.length !== 1 ? "s" : ""}
+            {pipeline.length} actif{pipeline.length !== 1 ? "s" : ""} · {archives.length} perdu{archives.length !== 1 ? "s" : ""}
           </p>
         </div>
         <Button size="sm" className="gap-1.5" onClick={() => setDrawerOpen(true)}>
@@ -110,7 +171,7 @@ export function PipelineClient({
           )}
         >
           <Archive className="h-3.5 w-3.5" />
-          Ruptures
+          Perdus
           <span className={cn(
             "inline-flex items-center justify-center rounded-full px-1.5 py-0.5 text-xs font-semibold min-w-[1.25rem]",
             tab === "archives" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
@@ -160,11 +221,11 @@ export function PipelineClient({
         profiles={profiles}
       />
 
-      <RuptureModal
-        open={!!rupturePending}
-        needTitle={ruptureTitle}
-        onConfirm={handleRuptureConfirm}
-        onCancel={() => setRupturePending(null)}
+      <LostModal
+        open={!!pending}
+        needTitle={pendingTitle}
+        onConfirm={handleConfirm}
+        onCancel={() => setPending(null)}
       />
     </div>
   );

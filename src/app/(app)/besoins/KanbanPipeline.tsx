@@ -23,6 +23,7 @@ const ACTIVE_STATUSES = [
   { key: "interview",       label: "Entretien" },
   { key: "waiting_fre",     label: "Attente FRE" },
   { key: "client",          label: "Client" },
+  { key: "rupture",         label: "Rupture" },
 ] as const;
 
 const STATUS_STYLES: Record<string, { border: string; badge: string; dot: string }> = {
@@ -33,6 +34,7 @@ const STATUS_STYLES: Record<string, { border: string; badge: string; dot: string
   waiting_fre:      { border: "border-t-amber-400",   badge: "bg-amber-100 text-amber-700",    dot: "bg-amber-400" },
   client:           { border: "border-t-emerald-400", badge: "bg-emerald-100 text-emerald-700",dot: "bg-emerald-400" },
   rupture:          { border: "border-t-red-400",     badge: "bg-red-100 text-red-700",        dot: "bg-red-400" },
+  lost:             { border: "border-t-gray-400",    badge: "bg-gray-100 text-gray-600",      dot: "bg-gray-400" },
 };
 
 function initials(name: string) {
@@ -93,12 +95,12 @@ function NeedCard({
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuLabel>Archiver</DropdownMenuLabel>
+              <DropdownMenuLabel>Clore</DropdownMenuLabel>
               <DropdownMenuItem
                 variant="destructive"
-                onClick={(e) => { e.stopPropagation(); onStatusChange(need.id, "rupture"); }}
+                onClick={(e) => { e.stopPropagation(); onStatusChange(need.id, "lost"); }}
               >
-                Rupture
+                Perdu
               </DropdownMenuItem>
             </DropdownMenuGroup>
           </DropdownMenuContent>

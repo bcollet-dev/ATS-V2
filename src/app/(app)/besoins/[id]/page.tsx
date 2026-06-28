@@ -20,6 +20,7 @@ const STATUS_LABELS: Record<string, string> = {
   waiting_fre:      "Attente FRE",
   client:           "Client",
   rupture:          "Rupture",
+  lost:             "Perdu",
 };
 
 const STATUS_BADGE: Record<string, string> = {
@@ -30,6 +31,7 @@ const STATUS_BADGE: Record<string, string> = {
   waiting_fre:      "bg-amber-100 text-amber-700",
   client:           "bg-emerald-100 text-emerald-700",
   rupture:          "bg-red-100 text-red-700",
+  lost:             "bg-gray-100 text-gray-600",
 };
 
 export default async function BesoinPage({

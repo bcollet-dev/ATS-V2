@@ -31,6 +31,7 @@ export const needStatus = pgEnum("need_status", [
   "waiting_fre",
   "client",
   "rupture",
+  "lost",
 ]);
 
 export const propositionStatus = pgEnum("proposition_status", [

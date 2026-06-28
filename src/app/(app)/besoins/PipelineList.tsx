@@ -25,6 +25,7 @@ const STATUS_LABELS: Record<string, string> = {
   waiting_fre:      "Attente FRE",
   client:           "Client",
   rupture:          "Rupture",
+  lost:             "Perdu",
 };
 
 const STATUS_BADGE: Record<string, string> = {
@@ -35,6 +36,7 @@ const STATUS_BADGE: Record<string, string> = {
   waiting_fre:      "bg-amber-100 text-amber-700",
   client:           "bg-emerald-100 text-emerald-700",
   rupture:          "bg-red-100 text-red-700",
+  lost:             "bg-gray-100 text-gray-600",
 };
 
 const STATUS_DOT: Record<string, string> = {
@@ -45,6 +47,7 @@ const STATUS_DOT: Record<string, string> = {
   waiting_fre:      "bg-amber-400",
   client:           "bg-emerald-400",
   rupture:          "bg-red-400",
+  lost:             "bg-gray-400",
 };
 
 const PIPELINE_STATUSES = [
@@ -54,6 +57,7 @@ const PIPELINE_STATUSES = [
   { key: "interview",        label: "Entretien" },
   { key: "waiting_fre",      label: "Attente FRE" },
   { key: "client",           label: "Client" },
+  { key: "rupture",          label: "Rupture" },
 ];
 
 type SortKey = "title" | "company" | "status" | "cursus" | "city" | "owner" | "nextTask";
@@ -130,11 +134,11 @@ function StatusCell({
           ))}
           <div className="border-t">
             <button
-              onClick={() => { setOpen(false); onStatusChange(need.id, "rupture"); }}
+              onClick={() => { setOpen(false); onStatusChange(need.id, "lost"); }}
               className="flex items-center gap-2 w-full px-3 py-1.5 text-xs hover:bg-accent transition-colors text-destructive"
             >
-              <span className={cn("h-2 w-2 rounded-full shrink-0", STATUS_DOT.rupture)} />
-              Rupture
+              <span className={cn("h-2 w-2 rounded-full shrink-0", STATUS_DOT.lost)} />
+              Perdu
             </button>
           </div>
         </div>
@@ -546,8 +550,8 @@ export function PipelineList({
                         </DropdownMenuTrigger>
                         <DropdownMenuContent side="bottom" align="end">
                           <DropdownMenuGroup>
-                            <DropdownMenuLabel>Archiver</DropdownMenuLabel>
-                            <DropdownMenuItem variant="destructive" onClick={() => onStatusChange(n.id, "rupture")}>Rupture</DropdownMenuItem>
+                            <DropdownMenuLabel>Clore</DropdownMenuLabel>
+                            <DropdownMenuItem variant="destructive" onClick={() => onStatusChange(n.id, "lost")}>Perdu</DropdownMenuItem>
                           </DropdownMenuGroup>
                         </DropdownMenuContent>
                       </DropdownMenu>
