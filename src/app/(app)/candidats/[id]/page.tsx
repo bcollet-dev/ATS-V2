@@ -20,10 +20,12 @@ import { BlocFormations } from "./BlocFormations";
 import { BlocTaches } from "./BlocTaches";
 import { BlocHistorique } from "./BlocHistorique";
 import { BlocMatchings } from "./BlocMatchings";
+import { BlocDocuments } from "./BlocDocuments";
 import {
   loadMatchingsForCandidate,
   loadAvailableNeedsForCandidate,
 } from "@/app/(app)/matching/actions";
+import { getCandidateCV } from "./actions";
 
 const STATUS_LABELS: Record<string, string> = {
   to_call: "À appeler",
@@ -60,7 +62,7 @@ export default async function CandidatPage({
     getActiveCursus(),
   ]);
 
-  const [candidat, experiences, formations, skills, candidateTasks, activeProfiles, candidateMatchings, availableNeeds] = await Promise.all([
+  const [candidat, experiences, formations, skills, candidateTasks, activeProfiles, candidateMatchings, availableNeeds, candidateCV] = await Promise.all([
     db.query.candidates.findFirst({
       where: and(eq(candidates.id, id), isNull(candidates.deletedAt)),
     }),
@@ -120,6 +122,7 @@ export default async function CandidatPage({
       .orderBy(asc(profiles.fullName)),
     loadMatchingsForCandidate(id),
     loadAvailableNeedsForCandidate(id),
+    getCandidateCV(id),
   ]);
 
   if (!candidat) notFound();
@@ -213,6 +216,9 @@ export default async function CandidatPage({
           profiles={activeProfiles}
           currentUserId={user.id}
         />
+
+        {/* Documents */}
+        <BlocDocuments candidateId={candidat.id} initialCV={candidateCV} />
 
         {/* Parcours */}
         <section className="rounded-lg border bg-card overflow-hidden">

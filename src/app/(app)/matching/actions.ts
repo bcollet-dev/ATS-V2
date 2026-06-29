@@ -2,9 +2,10 @@
 
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/db";
-import { matchings, candidates, needs, companies, cursus } from "@/db/schema";
+import { matchings, candidates, needs, companies, cursus, documents, profiles, companyContacts, mailTemplates } from "@/db/schema";
 import { eq, isNull, and, asc, notInArray, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { createClient } from "@/lib/supabase/server";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -344,6 +345,28 @@ export async function deleteMatching(id: string): Promise<void> {
 }
 
 // Revalidate need-specific path
+export async function deleteAllMatchingsForNeed(needId: string): Promise<void> {
+  await requireAuth();
+  await db.delete(matchings).where(eq(matchings.needId, needId));
+  revalidatePath("/besoins");
+  revalidatePath("/candidats");
+  revalidatePath("/matching");
+}
+
+export async function deleteAllMatchingsForCandidate(candidateId: string): Promise<void> {
+  await requireAuth();
+  const rows = await db
+    .select({ needId: matchings.needId })
+    .from(matchings)
+    .where(eq(matchings.candidateId, candidateId));
+  await db.delete(matchings).where(eq(matchings.candidateId, candidateId));
+  const needIds = [...new Set(rows.map((r) => r.needId as string))];
+  await Promise.all(needIds.map(syncNeedStatusFromMatchings));
+  revalidatePath("/besoins");
+  revalidatePath("/candidats");
+  revalidatePath("/matching");
+}
+
 export async function revalidateNeed(needId: string): Promise<void> {
   revalidatePath(`/besoins/${needId}`);
   revalidatePath("/besoins");
@@ -352,4 +375,417 @@ export async function revalidateNeed(needId: string): Promise<void> {
 export async function revalidateCandidat(candidateId: string): Promise<void> {
   revalidatePath(`/candidats/${candidateId}`);
   revalidatePath("/candidats");
+}
+
+// ─── Batch create ────────────────────────────────────────────────────────────
+
+export async function batchCreateMatchings(
+  pairs: { candidateId: string; needId: string }[]
+): Promise<{ created: number; skipped: number }> {
+  await requireAuth();
+  if (pairs.length === 0) return { created: 0, skipped: 0 };
+
+  const candidateIds = [...new Set(pairs.map((p) => p.candidateId))];
+  const needIds = [...new Set(pairs.map((p) => p.needId))];
+
+  const existingPairs = await db
+    .select({ candidateId: matchings.candidateId, needId: matchings.needId })
+    .from(matchings)
+    .where(
+      and(
+        inArray(matchings.candidateId, candidateIds),
+        inArray(matchings.needId, needIds)
+      )
+    );
+
+  const existingSet = new Set(existingPairs.map((p) => `${p.candidateId}:${p.needId}`));
+  const newPairs = pairs.filter((p) => !existingSet.has(`${p.candidateId}:${p.needId}`));
+
+  if (newPairs.length > 0) {
+    await db.insert(matchings).values(
+      newPairs.map((p) => ({ candidateId: p.candidateId, needId: p.needId }))
+    );
+    const affectedNeedIds = [...new Set(newPairs.map((p) => p.needId))];
+    await Promise.all(affectedNeedIds.map(syncNeedStatusFromMatchings));
+  }
+
+  revalidatePath("/matching");
+  revalidatePath("/besoins");
+  revalidatePath("/candidats");
+
+  return { created: newPairs.length, skipped: pairs.length - newPairs.length };
+}
+
+// ─── Matching page loaders ────────────────────────────────────────────────────
+
+export type MatchingCandidateRow = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  status: string;
+  cursusEnvisage: string | null;
+  city: string | null;
+  ownerId: string | null;
+  ownerName: string | null;
+  updatedAt: string;
+  hasCV: boolean;
+  activeMatchingNeedIds: string[];
+};
+
+export type MatchingNeedRow = {
+  id: string;
+  title: string;
+  companyId: string;
+  companyName: string;
+  targetCursusId: string | null;
+  targetCursusName: string | null;
+  city: string | null;
+  status: string;
+  ownerId: string | null;
+  ownerName: string | null;
+  updatedAt: string;
+  activeMatchingsCount: number;
+  activeMatchingCandidateIds: string[];
+};
+
+export async function loadCandidatesForMatching(): Promise<MatchingCandidateRow[]> {
+  await requireAuth();
+
+  const rows = await db
+    .select({
+      id: candidates.id,
+      firstName: candidates.firstName,
+      lastName: candidates.lastName,
+      status: candidates.status,
+      cursusEnvisage: candidates.cursusEnvisage,
+      city: candidates.city,
+      ownerId: candidates.ownerId,
+      ownerName: profiles.fullName,
+      updatedAt: candidates.updatedAt,
+    })
+    .from(candidates)
+    .leftJoin(profiles, eq(candidates.ownerId, profiles.id))
+    .where(
+      and(
+        isNull(candidates.deletedAt),
+        notInArray(candidates.status, [
+          "to_call", "in_progress", "no_response", "interview", "pvpp",
+          "temporary_refusal", "definitive_refusal",
+        ])
+      )
+    )
+    .orderBy(asc(candidates.firstName));
+
+  if (rows.length === 0) return [];
+
+  const candidateIds = rows.map((r) => r.id);
+
+  const [cvRows, matchingRows] = await Promise.all([
+    db
+      .select({ candidateId: documents.candidateId })
+      .from(documents)
+      .where(and(inArray(documents.candidateId, candidateIds), eq(documents.documentType, "cv"))),
+    db
+      .select({ candidateId: matchings.candidateId, needId: matchings.needId })
+      .from(matchings)
+      .where(
+        and(
+          inArray(matchings.candidateId, candidateIds),
+          notInArray(matchings.propositionStatus, ["not_retained"]),
+        )
+      ),
+  ]);
+
+  const cvSet = new Set(cvRows.map((r) => r.candidateId as string));
+  const matchingNeedsByCandidate = new Map<string, string[]>();
+  for (const r of matchingRows) {
+    const cid = r.candidateId as string;
+    if (!matchingNeedsByCandidate.has(cid)) matchingNeedsByCandidate.set(cid, []);
+    matchingNeedsByCandidate.get(cid)!.push(r.needId as string);
+  }
+
+  return rows.map((r) => ({
+    id: r.id,
+    firstName: r.firstName,
+    lastName: r.lastName,
+    status: r.status,
+    cursusEnvisage: r.cursusEnvisage ?? null,
+    city: r.city ?? null,
+    ownerId: r.ownerId ?? null,
+    ownerName: r.ownerName ?? null,
+    updatedAt: r.updatedAt.toISOString(),
+    hasCV: cvSet.has(r.id),
+    activeMatchingNeedIds: matchingNeedsByCandidate.get(r.id) ?? [],
+  }));
+}
+
+// ─── Email modal types ────────────────────────────────────────────────────────
+
+export type EmailModalContact = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string | null;
+  isPrimary: boolean;
+};
+
+export type EmailModalTemplate = {
+  id: string;
+  name: string;
+  subject: string;
+  body: string;
+};
+
+export type EmailModalCVInfo = {
+  documentId: string;
+  fileName: string;
+  storagePath: string;
+};
+
+export type EmailModalData = {
+  contactsByCompanyId: Record<string, EmailModalContact[]>;
+  templates: EmailModalTemplate[];
+  cvByCandidate: Record<string, EmailModalCVInfo | null>;
+};
+
+export async function loadEmailModalData(
+  companyIds: string[],
+  candidateIds: string[]
+): Promise<EmailModalData> {
+  await requireAuth();
+
+  const [contactRows, templateRows, cvRows] = await Promise.all([
+    companyIds.length > 0
+      ? db
+          .select({
+            id: companyContacts.id,
+            companyId: companyContacts.companyId,
+            firstName: companyContacts.firstName,
+            lastName: companyContacts.lastName,
+            email: companyContacts.email,
+            isPrimary: companyContacts.isPrimary,
+          })
+          .from(companyContacts)
+          .where(and(inArray(companyContacts.companyId, companyIds), isNull(companyContacts.deletedAt)))
+          .orderBy(asc(companyContacts.firstName))
+      : Promise.resolve([]),
+    db
+      .select({ id: mailTemplates.id, name: mailTemplates.name, subject: mailTemplates.subject, body: mailTemplates.body })
+      .from(mailTemplates)
+      .where(and(eq(mailTemplates.active, true), isNull(mailTemplates.deletedAt)))
+      .orderBy(asc(mailTemplates.name)),
+    candidateIds.length > 0
+      ? db
+          .select({ candidateId: documents.candidateId, id: documents.id, fileName: documents.fileName, storagePath: documents.storagePath })
+          .from(documents)
+          .where(and(inArray(documents.candidateId, candidateIds), eq(documents.documentType, "cv")))
+      : Promise.resolve([]),
+  ]);
+
+  const contactsByCompanyId: Record<string, EmailModalContact[]> = {};
+  for (const r of contactRows) {
+    if (!contactsByCompanyId[r.companyId]) contactsByCompanyId[r.companyId] = [];
+    contactsByCompanyId[r.companyId].push({
+      id: r.id,
+      firstName: r.firstName,
+      lastName: r.lastName,
+      email: r.email,
+      isPrimary: r.isPrimary !== null && r.isPrimary !== "",
+    });
+  }
+  for (const contacts of Object.values(contactsByCompanyId)) {
+    contacts.sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary));
+  }
+
+  const cvByCandidate: Record<string, EmailModalCVInfo | null> = {};
+  for (const id of candidateIds) cvByCandidate[id] = null;
+  for (const r of cvRows) {
+    cvByCandidate[r.candidateId as string] = {
+      documentId: r.id,
+      fileName: r.fileName,
+      storagePath: r.storagePath,
+    };
+  }
+
+  return {
+    contactsByCompanyId,
+    templates: templateRows,
+    cvByCandidate,
+  };
+}
+
+// ─── Send emails ──────────────────────────────────────────────────────────────
+
+export async function sendMatchingEmails(params: {
+  emails: {
+    needId: string;
+    recipientEmail: string;
+    subject: string;
+    body: string;
+    cvDocumentIds: string[];
+  }[];
+}): Promise<{ results: { needId: string; success: boolean; error?: string }[] }> {
+  const user = await requireAuth();
+
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    return {
+      results: params.emails.map((e) => ({
+        needId: e.needId,
+        success: false,
+        error: "GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET manquants dans l'environnement",
+      })),
+    };
+  }
+
+  if (!user.googleRefreshToken) {
+    return {
+      results: params.emails.map((e) => ({
+        needId: e.needId,
+        success: false,
+        error: "Token Gmail non disponible. Reconnectez-vous avec Google pour autoriser l'envoi d'emails.",
+      })),
+    };
+  }
+
+  // Gather all needed document IDs and fetch their metadata + content
+  const allDocIds = [...new Set(params.emails.flatMap((e) => e.cvDocumentIds))];
+
+  const docRows = allDocIds.length > 0
+    ? await db
+        .select({ id: documents.id, fileName: documents.fileName, storagePath: documents.storagePath })
+        .from(documents)
+        .where(inArray(documents.id, allDocIds))
+    : [];
+
+  const docMap = new Map(docRows.map((r) => [r.id, r]));
+
+  // Download files from Supabase Storage
+  const supabase = await createClient();
+  const fileCache = new Map<string, Buffer>();
+  await Promise.all(
+    docRows.map(async (doc) => {
+      const { data, error } = await supabase.storage.from("documents").download(doc.storagePath);
+      if (!error && data) {
+        fileCache.set(doc.id, Buffer.from(await data.arrayBuffer()));
+      }
+    })
+  );
+
+  // Create nodemailer transporter with OAuth2
+  const nodemailer = (await import("nodemailer")).default;
+  const transporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+      type: "OAuth2",
+      user: user.email,
+      clientId,
+      clientSecret,
+      refreshToken: user.googleRefreshToken,
+    },
+  });
+
+  const results: { needId: string; success: boolean; error?: string }[] = [];
+
+  for (const email of params.emails) {
+    const attachments = email.cvDocumentIds
+      .map((id) => {
+        const doc = docMap.get(id);
+        const content = fileCache.get(id);
+        if (!doc || !content) return null;
+        return { filename: doc.fileName, content };
+      })
+      .filter((a): a is { filename: string; content: Buffer } => a !== null);
+
+    try {
+      await transporter.sendMail({
+        from: `"EDA Groupe" <${user.email}>`,
+        to: email.recipientEmail,
+        subject: email.subject,
+        text: email.body,
+        attachments,
+      });
+      results.push({ needId: email.needId, success: true });
+    } catch (err) {
+      results.push({
+        needId: email.needId,
+        success: false,
+        error: err instanceof Error ? err.message : "Erreur d'envoi inconnue",
+      });
+    }
+  }
+
+  return { results };
+}
+
+export async function loadNeedsForMatching(): Promise<MatchingNeedRow[]> {
+  await requireAuth();
+
+  const rows = await db
+    .select({
+      id: needs.id,
+      title: needs.title,
+      companyId: needs.companyId,
+      companyName: companies.name,
+      targetCursusId: needs.targetCursusId,
+      targetCursusName: cursus.name,
+      city: needs.city,
+      status: needs.status,
+      ownerId: needs.ownerId,
+      ownerName: profiles.fullName,
+      updatedAt: needs.updatedAt,
+    })
+    .from(needs)
+    .leftJoin(companies, eq(needs.companyId, companies.id))
+    .leftJoin(cursus, eq(needs.targetCursusId, cursus.id))
+    .leftJoin(profiles, eq(needs.ownerId, profiles.id))
+    .where(
+      and(
+        isNull(needs.deletedAt),
+        notInArray(needs.status, ["lost", "ad_chase", "prospect"])
+      )
+    )
+    .orderBy(asc(needs.title));
+
+  if (rows.length === 0) return [];
+
+  const needIds = rows.map((r) => r.id);
+
+  const matchingRows = await db
+    .select({ needId: matchings.needId, candidateId: matchings.candidateId })
+    .from(matchings)
+    .where(
+      and(
+        inArray(matchings.needId, needIds),
+        notInArray(matchings.propositionStatus, ["not_retained"]),
+      )
+    );
+
+  const matchingsByNeed = new Map<string, string[]>();
+  for (const r of matchingRows) {
+    const nid = r.needId as string;
+    if (!matchingsByNeed.has(nid)) matchingsByNeed.set(nid, []);
+    matchingsByNeed.get(nid)!.push(r.candidateId as string);
+  }
+
+  return rows.map((r) => {
+    const candidateIds = matchingsByNeed.get(r.id) ?? [];
+    return {
+      id: r.id,
+      title: r.title,
+      companyId: r.companyId,
+      companyName: r.companyName ?? "—",
+      targetCursusId: r.targetCursusId ?? null,
+      targetCursusName: r.targetCursusName ?? null,
+      city: r.city ?? null,
+      status: r.status,
+      ownerId: r.ownerId ?? null,
+      ownerName: r.ownerName ?? null,
+      updatedAt: r.updatedAt.toISOString(),
+      activeMatchingsCount: candidateIds.length,
+      activeMatchingCandidateIds: candidateIds,
+    };
+  });
 }

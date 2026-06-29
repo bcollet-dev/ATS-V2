@@ -15,6 +15,7 @@ export const profiles = pgTable("profiles", {
   role: appRole("role").notNull().default("admissions"),
   active: boolean("active").notNull().default(true),
   nameConfirmed: boolean("name_confirmed").notNull().default(false),
+  googleRefreshToken: text("google_refresh_token"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),

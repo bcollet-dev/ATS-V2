@@ -1,11 +1,12 @@
 "use server";
 
 import { db } from "@/db";
-import { candidates, activityEvents } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { candidates, activityEvents, documents } from "@/db/schema";
+import { eq, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
 import { encryptNir, decryptNir } from "@/lib/nir";
+import { createClient } from "@/lib/supabase/server";
 
 export type CommuneResult = {
   nom: string;
@@ -228,4 +229,105 @@ export async function revealNir(
   } catch {
     return { error: "Erreur de déchiffrement" };
   }
+}
+
+// ─── CV upload ────────────────────────────────────────────────────────────────
+
+const ALLOWED_MIME_TYPES = new Set([
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+]);
+const MAX_SIZE = 10 * 1024 * 1024; // 10 Mo
+
+function getExtension(mimeType: string): string {
+  if (mimeType === "application/pdf") return "pdf";
+  if (mimeType === "application/msword") return "doc";
+  return "docx";
+}
+
+export type CVDocument = {
+  id: string;
+  fileName: string;
+  storagePath: string;
+  createdAt: string;
+};
+
+export async function getCandidateCV(candidateId: string): Promise<CVDocument | null> {
+  const user = await getCurrentUser();
+  if (!user) return null;
+  const [row] = await db
+    .select({ id: documents.id, fileName: documents.fileName, storagePath: documents.storagePath, createdAt: documents.createdAt })
+    .from(documents)
+    .where(and(eq(documents.candidateId, candidateId), eq(documents.documentType, "cv")))
+    .limit(1);
+  if (!row) return null;
+  return { id: row.id, fileName: row.fileName, storagePath: row.storagePath, createdAt: row.createdAt.toISOString() };
+}
+
+export async function uploadCandidateCV(
+  candidateId: string,
+  formData: FormData
+): Promise<{ success: true; documentId: string } | { success: false; error: string }> {
+  const user = await getCurrentUser();
+  if (!user) return { success: false, error: "Non authentifié" };
+
+  const file = formData.get("file") as File | null;
+  if (!file || file.size === 0) return { success: false, error: "Aucun fichier sélectionné" };
+
+  if (!ALLOWED_MIME_TYPES.has(file.type)) {
+    return { success: false, error: "Format non supporté. Utilisez PDF, DOC ou DOCX." };
+  }
+  if (file.size > MAX_SIZE) {
+    return { success: false, error: "Fichier trop volumineux (max 10 Mo)" };
+  }
+
+  const ext = getExtension(file.type);
+  const uuid = crypto.randomUUID();
+  const storagePath = `candidates/${candidateId}/${uuid}.${ext}`;
+
+  const supabase = await createClient();
+  const bytes = await file.arrayBuffer();
+
+  const { error: uploadError } = await supabase.storage
+    .from("documents")
+    .upload(storagePath, bytes, { contentType: file.type, upsert: false });
+
+  if (uploadError) {
+    return { success: false, error: `Erreur d'upload : ${uploadError.message}` };
+  }
+
+  // Upsert : one CV record per candidate
+  const existing = await db
+    .select({ id: documents.id })
+    .from(documents)
+    .where(and(eq(documents.candidateId, candidateId), eq(documents.documentType, "cv")))
+    .limit(1);
+
+  let documentId: string;
+  if (existing.length > 0) {
+    documentId = existing[0].id;
+    await db
+      .update(documents)
+      .set({ fileName: file.name, storagePath, mimeType: file.type, fileSize: file.size })
+      .where(eq(documents.id, documentId));
+  } else {
+    const [inserted] = await db
+      .insert(documents)
+      .values({
+        candidateId,
+        documentType: "cv",
+        fileName: file.name,
+        storagePath,
+        mimeType: file.type,
+        fileSize: file.size,
+        createdBy: user.id,
+      })
+      .returning({ id: documents.id });
+    documentId = inserted.id;
+  }
+
+  revalidatePath(`/candidats/${candidateId}`);
+  revalidatePath("/matching");
+  return { success: true, documentId };
 }

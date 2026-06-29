@@ -11,7 +11,9 @@ import { updateNeedStatus, type NeedRow } from "./actions";
 import {
   loadMatchingsForNeed,
   updateMatchingStatus,
+  deleteAllMatchingsForNeed,
 } from "@/app/(app)/matching/actions";
+import { updateCandidateStatus } from "@/app/(app)/candidats/actions";
 import { KanbanPipeline } from "./KanbanPipeline";
 import { PipelineList } from "./PipelineList";
 import { NeedDrawer } from "./NeedDrawer";
@@ -22,6 +24,9 @@ type Tab = "pipeline" | "archives";
 
 // Statuts nécessitant un motif
 const REASON_REQUIRED = new Set(["rupture", "lost"]);
+
+// Statuts qui régressent hors zone matching
+const DEGRADE_STATUSES = new Set(["ad_chase", "prospect"]);
 
 function LostModal({
   open,
@@ -89,6 +94,8 @@ function LostModal({
 
 // ─── Select Retenu Modal ──────────────────────────────────────────────────────
 
+type RetenuRow = { id: string; candidateId: string; candidateName: string; candidateCursus: string | null };
+
 function SelectRetenuModal({
   open,
   needId,
@@ -101,10 +108,10 @@ function SelectRetenuModal({
   needId: string;
   needTitle: string;
   activeMatchingsCount: number;
-  onConfirm: (matchingId: string) => void;
+  onConfirm: (matchingId: string, candidateId: string) => void;
   onCancel: () => void;
 }) {
-  const [rows, setRows] = useState<{ id: string; candidateName: string; candidateCursus: string | null }[]>([]);
+  const [rows, setRows] = useState<RetenuRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState("");
 
@@ -116,7 +123,7 @@ function SelectRetenuModal({
       setRows(
         data
           .filter((m) => !m.isFrozen && m.propositionStatus !== "not_retained" && m.propositionStatus !== "placed")
-          .map((m) => ({ id: m.id, candidateName: m.candidateName, candidateCursus: m.candidateCursus }))
+          .map((m) => ({ id: m.id, candidateId: m.candidateId, candidateName: m.candidateName, candidateCursus: m.candidateCursus }))
       );
       setLoading(false);
     });
@@ -129,7 +136,9 @@ function SelectRetenuModal({
 
   function handleConfirm() {
     if (!selected) return;
-    onConfirm(selected);
+    const row = rows.find((r) => r.id === selected);
+    if (!row) return;
+    onConfirm(row.id, row.candidateId);
     setSelected("");
   }
 
@@ -219,6 +228,8 @@ function SelectRetenuModal({
 
 // ─── Select Interview Modal ───────────────────────────────────────────────────
 
+type InterviewRow = { id: string; candidateId: string; candidateName: string; candidateCursus: string | null };
+
 function SelectInterviewModal({
   open,
   needId,
@@ -231,10 +242,10 @@ function SelectInterviewModal({
   needId: string;
   needTitle: string;
   activeMatchingsCount: number;
-  onConfirm: (matchingIds: string[]) => void;
+  onConfirm: (selections: { matchingId: string; candidateId: string }[]) => void;
   onCancel: () => void;
 }) {
-  const [rows, setRows] = useState<{ id: string; candidateName: string; candidateCursus: string | null }[]>([]);
+  const [rows, setRows] = useState<InterviewRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
@@ -246,7 +257,7 @@ function SelectInterviewModal({
       setRows(
         data
           .filter((m) => !m.isFrozen && m.propositionStatus === "cv_sent")
-          .map((m) => ({ id: m.id, candidateName: m.candidateName, candidateCursus: m.candidateCursus }))
+          .map((m) => ({ id: m.id, candidateId: m.candidateId, candidateName: m.candidateName, candidateCursus: m.candidateCursus }))
       );
       setLoading(false);
     });
@@ -267,7 +278,10 @@ function SelectInterviewModal({
 
   function handleConfirm() {
     if (selected.size === 0) return;
-    onConfirm([...selected]);
+    const selections = rows
+      .filter((r) => selected.has(r.id))
+      .map((r) => ({ matchingId: r.id, candidateId: r.candidateId }));
+    onConfirm(selections);
     setSelected(new Set());
   }
 
@@ -360,6 +374,49 @@ function SelectInterviewModal({
   );
 }
 
+// ─── Degrade Need Modal ───────────────────────────────────────────────────────
+
+function DegradeNeedModal({
+  open,
+  needTitle,
+  targetStatus,
+  matchingsCount,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean;
+  needTitle: string;
+  targetStatus: string;
+  matchingsCount: number;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const label = targetStatus === "ad_chase" ? "Ad Chase" : "Prospect";
+  return (
+    <Modal open={open} onOpenChange={(o) => { if (!o) onCancel(); }}>
+      <ModalContent className="max-w-md">
+        <ModalHeader>
+          <ModalTitle>Rétrograder le besoin</ModalTitle>
+        </ModalHeader>
+        <ModalBody className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Passer <span className="font-medium text-foreground">{needTitle}</span> en{" "}
+            <span className="font-medium">{label}</span>.
+          </p>
+          <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+            {matchingsCount} candidat{matchingsCount > 1 ? "s" : ""} rattaché{matchingsCount > 1 ? "s" : ""}{" "}
+            ser{matchingsCount > 1 ? "ont" : "a"} retiré{matchingsCount > 1 ? "s" : ""} de ce besoin.
+          </p>
+        </ModalBody>
+        <ModalFooter>
+          <Button variant="outline" onClick={onCancel}>Annuler</Button>
+          <Button variant="destructive" onClick={onConfirm}>Confirmer</Button>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
+  );
+}
+
 // ─── Pipeline Client ──────────────────────────────────────────────────────────
 
 export function PipelineClient({
@@ -383,6 +440,9 @@ export function PipelineClient({
   const [pendingInterview, setPendingInterview] = useState<{
     id: string; title: string; activeMatchingsCount: number;
   } | null>(null);
+  const [pendingDegrade, setPendingDegrade] = useState<{
+    id: string; status: string; title: string; matchingsCount: number;
+  } | null>(null);
   const [, startTransition] = useTransition();
 
   const [needs, setOptimistic] = useOptimistic(
@@ -403,6 +463,18 @@ export function PipelineClient({
       setPending({ id, status, activeMatchingsCount: need?.activeMatchingsCount ?? 0 });
       return;
     }
+    if (DEGRADE_STATUSES.has(status)) {
+      const need = needs.find((n) => n.id === id);
+      if (need && need.activeMatchingsCount > 0) {
+        setPendingDegrade({
+          id,
+          status,
+          title: `${need.title} — ${need.companyName}`,
+          matchingsCount: need.activeMatchingsCount,
+        });
+        return;
+      }
+    }
     if (status === "interview") {
       const need = needs.find((n) => n.id === id);
       if (need && need.interviewCandidatesCount === 0) {
@@ -417,6 +489,19 @@ export function PipelineClient({
     if (status === "waiting_fre") {
       const need = needs.find((n) => n.id === id);
       if (need && need.waitingFreCandidatesCount === 0) {
+        const active = need.needCandidates.filter(
+          (c) => !c.isFrozen && c.propositionStatus !== "not_retained" && c.propositionStatus !== "placed"
+        );
+        if (active.length === 1) {
+          const { matchingId, candidateId } = active[0];
+          startTransition(async () => {
+            setOptimistic({ id, status: "waiting_fre" });
+            await updateMatchingStatus(matchingId, "waiting_fre");
+            await updateCandidateStatus(candidateId, "waiting_fre");
+            await updateNeedStatus(id, "waiting_fre");
+          });
+          return;
+        }
         setPendingRetenu({
           id,
           title: `${need.title} — ${need.companyName}`,
@@ -441,25 +526,40 @@ export function PipelineClient({
     });
   }
 
-  function handleRetenuConfirm(matchingId: string) {
+  function handleRetenuConfirm(matchingId: string, candidateId: string) {
     if (!pendingRetenu) return;
     const { id } = pendingRetenu;
     setPendingRetenu(null);
     startTransition(async () => {
       setOptimistic({ id, status: "waiting_fre" });
       await updateMatchingStatus(matchingId, "waiting_fre");
+      await updateCandidateStatus(candidateId, "waiting_fre");
       await updateNeedStatus(id, "waiting_fre");
     });
   }
 
-  function handleInterviewConfirm(matchingIds: string[]) {
-    if (!pendingInterview || matchingIds.length === 0) return;
+  function handleInterviewConfirm(selections: { matchingId: string; candidateId: string }[]) {
+    if (!pendingInterview || selections.length === 0) return;
     const { id } = pendingInterview;
     setPendingInterview(null);
     startTransition(async () => {
       setOptimistic({ id, status: "interview" });
-      await Promise.all(matchingIds.map((mId) => updateMatchingStatus(mId, "interview")));
+      await Promise.all([
+        ...selections.map(({ matchingId }) => updateMatchingStatus(matchingId, "interview")),
+        ...selections.map(({ candidateId }) => updateCandidateStatus(candidateId, "company_interview")),
+      ]);
       await updateNeedStatus(id, "interview");
+    });
+  }
+
+  function handleDegradeConfirm() {
+    if (!pendingDegrade) return;
+    const { id, status } = pendingDegrade;
+    setPendingDegrade(null);
+    startTransition(async () => {
+      setOptimistic({ id, status });
+      await deleteAllMatchingsForNeed(id);
+      await updateNeedStatus(id, status);
     });
   }
 
@@ -583,6 +683,15 @@ export function PipelineClient({
         activeMatchingsCount={pendingInterview?.activeMatchingsCount ?? 0}
         onConfirm={handleInterviewConfirm}
         onCancel={() => setPendingInterview(null)}
+      />
+
+      <DegradeNeedModal
+        open={!!pendingDegrade}
+        needTitle={pendingDegrade?.title ?? ""}
+        targetStatus={pendingDegrade?.status ?? ""}
+        matchingsCount={pendingDegrade?.matchingsCount ?? 0}
+        onConfirm={handleDegradeConfirm}
+        onCancel={() => setPendingDegrade(null)}
       />
     </div>
   );

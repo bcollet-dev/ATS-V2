@@ -8,7 +8,14 @@ export async function GET(request: NextRequest) {
 
   const { data } = await supabase.auth.signInWithOAuth({
     provider: "google",
-    options: { redirectTo: `${origin}/auth/callback` },
+    options: {
+      redirectTo: `${origin}/auth/callback`,
+      scopes: "https://www.googleapis.com/auth/gmail.send",
+      queryParams: {
+        access_type: "offline",
+        prompt: "consent",
+      },
+    },
   });
 
   if (data.url) redirect(data.url);

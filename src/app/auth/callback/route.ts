@@ -1,5 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse, type NextRequest } from "next/server";
+import { db } from "@/db";
+import { profiles } from "@/db/schema";
+import { eq } from "drizzle-orm";
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
@@ -20,8 +23,15 @@ export async function GET(request: NextRequest) {
 
   if (code) {
     const supabase = await createClient();
-    const { error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
-    if (!sessionError) {
+    const { data, error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
+    if (!sessionError && data.session) {
+      const refreshToken = data.session.provider_refresh_token;
+      if (refreshToken) {
+        await db
+          .update(profiles)
+          .set({ googleRefreshToken: refreshToken })
+          .where(eq(profiles.id, data.session.user.id));
+      }
       return NextResponse.redirect(`${origin}${next}`);
     }
   }
