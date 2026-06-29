@@ -16,7 +16,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { MoreHorizontal, Clock, AlertCircle, X, Plus } from "lucide-react";
+import { MoreHorizontal, Clock, AlertCircle, X, Plus, Archive } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
@@ -565,6 +565,34 @@ function DroppableColumn({
   );
 }
 
+// ─── Archive Drop Zone ───────────────────────────────────────────────────────
+
+function ArchiveDropZone() {
+  const { setNodeRef, isOver } = useDroppable({ id: "archived_drop" });
+  return (
+    <div className="flex flex-col w-48 shrink-0">
+      <div className="flex items-center gap-1.5 px-2.5 py-2 rounded-t-lg border-t-[3px] border-t-gray-300 bg-muted/30">
+        <Archive className="h-3 w-3 text-muted-foreground" />
+        <span className="text-xs font-semibold text-muted-foreground">Archiver</span>
+      </div>
+      <div
+        ref={setNodeRef}
+        className={cn(
+          "flex-1 flex flex-col items-center justify-center gap-2 p-4 rounded-b-lg min-h-48 border-2 border-dashed transition-all",
+          isOver
+            ? "border-destructive/60 bg-red-50/60 scale-[1.02]"
+            : "border-gray-200 bg-muted/10"
+        )}
+      >
+        <Archive className={cn("h-5 w-5 transition-colors", isOver ? "text-destructive/60" : "text-muted-foreground/30")} />
+        <p className={cn("text-[10px] text-center leading-tight transition-colors", isOver ? "text-destructive/70 font-medium" : "text-muted-foreground/40")}>
+          Déposer pour<br />archiver
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Kanban ─────────────────────────────────────────────────────────────
 
 export function KanbanPipeline({
@@ -614,6 +642,8 @@ export function KanbanPipeline({
               activeId={activeId}
             />
           ))}
+          <div className="w-px bg-border self-stretch mx-1" />
+          <ArchiveDropZone />
         </div>
       </div>
       <DragOverlay>
