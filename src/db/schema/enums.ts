@@ -27,6 +27,8 @@ export const needStatus = pgEnum("need_status", [
   "ad_chase",
   "prospect",
   "need_in_progress",
+  "a_shooter",
+  "cv_envoye",
   "interview",
   "waiting_fre",
   "client",

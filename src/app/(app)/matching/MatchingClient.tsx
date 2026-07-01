@@ -6,11 +6,11 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   Users, Briefcase, MapPin, GraduationCap, User, Paperclip,
-  Search, X, RotateCcw, Zap, Link2Off, Mail,
+  Search, X, RotateCcw, Zap, Link2Off, Mail, Trash2, ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { batchCreateMatchings } from "./actions";
+import { batchCreateMatchings, deleteMatching } from "./actions";
 import type { MatchingCandidateRow, MatchingNeedRow } from "./actions";
 import { SendEmailModal } from "./SendEmailModal";
 
@@ -50,6 +50,8 @@ const NEED_STATUS_LABEL: Record<string, string> = {
   ad_chase:         "Ad Chase",
   prospect:         "Prospect",
   need_in_progress: "Besoin en cours",
+  a_shooter:        "À shooter",
+  cv_envoye:        "CV envoyé",
   interview:        "Entretien",
   waiting_fre:      "Attente FRE",
   client:           "Client",
@@ -61,6 +63,8 @@ const NEED_STATUS_BADGE: Record<string, string> = {
   ad_chase:         "bg-slate-100 text-slate-700",
   prospect:         "bg-blue-100 text-blue-700",
   need_in_progress: "bg-violet-100 text-violet-700",
+  a_shooter:        "bg-amber-100 text-amber-700",
+  cv_envoye:        "bg-sky-100 text-sky-700",
   interview:        "bg-orange-100 text-orange-700",
   waiting_fre:      "bg-amber-100 text-amber-700",
   client:           "bg-emerald-100 text-emerald-700",
@@ -252,13 +256,18 @@ function CandidateCard({
 // ─── Need card ────────────────────────────────────────────────────────────────
 
 function NeedCard({
-  need, checked, onChange, alreadyMatched,
+  need, checked, onChange, alreadyMatched, deletedMatchingIds, onDeleteMatching,
 }: {
   need: MatchingNeedRow;
   checked: boolean;
   onChange: (checked: boolean) => void;
   alreadyMatched: boolean;
+  deletedMatchingIds: Set<string>;
+  onDeleteMatching: (matchingId: string) => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
+  const visibleMatchings = need.activeMatchings.filter((m) => !deletedMatchingIds.has(m.matchingId));
+
   return (
     <label
       className={cn(
@@ -317,13 +326,39 @@ function NeedCard({
               Déjà rattaché
             </span>
           )}
-          {need.activeMatchingsCount > 0 && (
-            <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+          {visibleMatchings.length > 0 && (
+            <button
+              onClick={(e) => { e.preventDefault(); setExpanded((v) => !v); }}
+              className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+            >
               <Users className="h-3 w-3" />
-              {need.activeMatchingsCount} candidat{need.activeMatchingsCount > 1 ? "s" : ""} en cours
-            </span>
+              {visibleMatchings.length} candidat{visibleMatchings.length > 1 ? "s" : ""} en cours
+              <ChevronDown className={cn("h-3 w-3 transition-transform", expanded && "rotate-180")} />
+            </button>
           )}
         </div>
+
+        {expanded && visibleMatchings.length > 0 && (
+          <div className="mt-1 rounded-md border divide-y bg-muted/20">
+            {visibleMatchings.map((m) => (
+              <div key={m.matchingId} className="flex items-center gap-2 px-2 py-1.5 text-xs">
+                <span className="flex-1 truncate font-medium">
+                  {m.candidateFirstName} {m.candidateLastName}
+                </span>
+                {m.hasCV && (
+                  <Paperclip className="h-3 w-3 text-emerald-600 shrink-0" />
+                )}
+                <button
+                  onClick={(e) => { e.preventDefault(); onDeleteMatching(m.matchingId); }}
+                  className="text-muted-foreground hover:text-red-600 transition-colors shrink-0 p-0.5"
+                  title="Supprimer ce matching"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </label>
   );
@@ -575,6 +610,9 @@ export function MatchingClient({
   const [selectedCandIds, setSelectedCandIds] = useState<Set<string>>(new Set());
   const [selectedNeedIds, setSelectedNeedIds] = useState<Set<string>>(new Set());
 
+  // Optimistic matching deletions (cleared on router.refresh)
+  const [deletedMatchingIds, setDeletedMatchingIds] = useState<Set<string>>(new Set());
+
   useEffect(() => { setMounted(true); }, []);
 
   // Filtered & sorted data
@@ -587,8 +625,7 @@ export function MatchingClient({
     [needs, needFilters, needSort]
   );
 
-  // Already-matched detection (candidate ↔ need pair both selected + already linked)
-  // A candidate card shows the badge if any selected need is already in its activeMatchingNeedIds
+  // Already-matched detection
   const alreadyMatchedCandIds = useMemo(() => {
     if (selectedNeedIds.size === 0) return new Set<string>();
     const result = new Set<string>();
@@ -605,7 +642,7 @@ export function MatchingClient({
     const result = new Set<string>();
     for (const need of needs) {
       if (!selectedNeedIds.has(need.id)) continue;
-      const hasLink = need.activeMatchingCandidateIds.some((cid) => selectedCandIds.has(cid));
+      const hasLink = need.activeMatchings.some((m) => selectedCandIds.has(m.candidateId));
       if (hasLink) result.add(need.id);
     }
     return result;
@@ -647,7 +684,22 @@ export function MatchingClient({
     setSelectedNeedIds(new Set());
   }
 
-  const showBanner = selectedCandIds.size >= 1 && selectedNeedIds.size >= 1;
+  // Delete matching (optimistic)
+  function handleDeleteMatching(matchingId: string) {
+    setDeletedMatchingIds((prev) => {
+      const next = new Set(prev);
+      next.add(matchingId);
+      return next;
+    });
+    startTransition(async () => {
+      await deleteMatching(matchingId);
+      router.refresh();
+    });
+  }
+
+  // Banner visibility
+  const showBanner = selectedNeedIds.size >= 1;
+  const showCreateButton = selectedCandIds.size >= 1 && selectedNeedIds.size >= 1;
 
   const selectedCandidatesData = useMemo(
     () => candidates.filter((c) => selectedCandIds.has(c.id)),
@@ -657,6 +709,40 @@ export function MatchingClient({
     () => needs.filter((n) => selectedNeedIds.has(n.id)),
     [needs, selectedNeedIds]
   );
+
+  // When no candidates are selected, derive effective candidates from selected needs' active matchings
+  const effectiveCandidatesForModal = useMemo(() => {
+    if (selectedCandIds.size > 0) return selectedCandidatesData;
+    const seen = new Set<string>();
+    const result: MatchingCandidateRow[] = [];
+    for (const need of selectedNeedsData) {
+      for (const m of need.activeMatchings) {
+        if (deletedMatchingIds.has(m.matchingId)) continue;
+        if (seen.has(m.candidateId)) continue;
+        seen.add(m.candidateId);
+        const existing = candidates.find((c) => c.id === m.candidateId);
+        if (existing) {
+          result.push(existing);
+        } else {
+          result.push({
+            id: m.candidateId,
+            firstName: m.candidateFirstName,
+            lastName: m.candidateLastName,
+            email: null,
+            status: m.propositionStatus,
+            cursusEnvisage: null,
+            city: null,
+            ownerId: null,
+            ownerName: null,
+            updatedAt: new Date().toISOString(),
+            hasCV: m.hasCV,
+            activeMatchingNeedIds: [],
+          });
+        }
+      }
+    }
+    return result;
+  }, [candidates, selectedCandIds, selectedCandidatesData, selectedNeedsData, deletedMatchingIds]);
 
   // Batch create
   function handleBatchCreate() {
@@ -688,24 +774,27 @@ export function MatchingClient({
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
       <div className="flex items-center gap-3 bg-foreground text-background rounded-xl shadow-xl px-5 py-3 text-sm font-medium">
         <span className="tabular-nums">
-          {selectedCandIds.size} candidat{selectedCandIds.size > 1 ? "s" : ""}{" "}
-          · {selectedNeedIds.size} besoin{selectedNeedIds.size > 1 ? "s" : ""}
+          {selectedCandIds.size > 0 && `${selectedCandIds.size} candidat${selectedCandIds.size > 1 ? "s" : ""} · `}
+          {selectedNeedIds.size} besoin{selectedNeedIds.size > 1 ? "s" : ""}
         </span>
         <div className="h-4 w-px bg-background/20" />
+        {showCreateButton && (
+          <Button
+            size="sm"
+            variant="secondary"
+            className="h-7 text-xs gap-1.5"
+            disabled={isPending}
+            onClick={handleBatchCreate}
+          >
+            <Zap className="h-3.5 w-3.5" />
+            {isPending ? "Création…" : "Créer les matchings"}
+          </Button>
+        )}
         <Button
           size="sm"
           variant="secondary"
           className="h-7 text-xs gap-1.5"
-          disabled={isPending}
-          onClick={handleBatchCreate}
-        >
-          <Zap className="h-3.5 w-3.5" />
-          {isPending ? "Création…" : "Créer les matchings"}
-        </Button>
-        <Button
-          size="sm"
-          variant="secondary"
-          className="h-7 text-xs gap-1.5"
+          disabled={effectiveCandidatesForModal.length === 0}
           onClick={() => setEmailModalOpen(true)}
         >
           <Mail className="h-3.5 w-3.5" />
@@ -825,6 +914,8 @@ export function MatchingClient({
                   checked={selectedNeedIds.has(n.id)}
                   onChange={(v) => toggleNeed(n.id, v)}
                   alreadyMatched={alreadyMatchedNeedIds.has(n.id)}
+                  deletedMatchingIds={deletedMatchingIds}
+                  onDeleteMatching={handleDeleteMatching}
                 />
               ))
             )}
@@ -837,7 +928,7 @@ export function MatchingClient({
       <SendEmailModal
         open={emailModalOpen}
         onClose={() => setEmailModalOpen(false)}
-        selectedCandidates={selectedCandidatesData}
+        selectedCandidates={effectiveCandidatesForModal}
         selectedNeeds={selectedNeedsData}
       />
     </>

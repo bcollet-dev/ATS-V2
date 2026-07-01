@@ -17,6 +17,7 @@ export const mailTemplates = pgTable("mail_templates", {
   category: text("category"),
   audience: mailAudience("audience").notNull().default("all"),
   active: boolean("active").notNull().default(true),
+  isDefaultCvNotification: boolean("is_default_cv_notification").notNull().default(false),
 
   createdBy: uuid("created_by").references(() => profiles.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
