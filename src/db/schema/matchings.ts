@@ -11,6 +11,7 @@ import { propositionStatus } from "./enums";
 import { profiles } from "./profiles";
 import { candidates } from "./candidates";
 import { needs } from "./needs";
+import { classes } from "./ypareo";
 
 export const matchings = pgTable(
   "matchings",
@@ -32,6 +33,8 @@ export const matchings = pgTable(
     isWinner: boolean("is_winner").notNull().default(false),
     // Gelé si non-gagnant suite à sélection d'un gagnant
     isFrozen: boolean("is_frozen").notNull().default(false),
+
+    classId: uuid("class_id").references(() => classes.id, { onDelete: "set null" }),
 
     refusalReason: text("refusal_reason"),
     notes: text("notes"),

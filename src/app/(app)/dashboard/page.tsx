@@ -1,14 +1,15 @@
 import { requireAuth } from "@/lib/auth";
+import { loadWidgetConfigs } from "./actions";
+import { DashboardClient } from "./DashboardClient";
 
 export default async function DashboardPage() {
-  const user = await requireAuth();
+  const [actor, widgets] = await Promise.all([requireAuth(), loadWidgetConfigs()]);
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-semibold">Dashboard</h1>
-      <p className="text-muted-foreground mt-1">
-        Bonjour, {user.fullName}
-      </p>
-    </div>
+    <DashboardClient
+      initialWidgets={widgets}
+      role={actor.role}
+      userId={actor.id}
+    />
   );
 }
