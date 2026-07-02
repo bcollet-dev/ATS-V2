@@ -235,9 +235,24 @@ export default async function CandidatPage({
             <h2 className="text-sm font-semibold">Parcours</h2>
           </div>
           <div className="divide-y">
-            <BlocCompetences candidateId={candidat.id} initialSkills={skills} embedded />
-            <BlocExperiences candidateId={candidat.id} initialExperiences={experiences} embedded />
-            <BlocFormations candidateId={candidat.id} initialFormations={formations} embedded />
+            <BlocCompetences
+              key={skills.map((s) => s.id).join(",")}
+              candidateId={candidat.id}
+              initialSkills={skills}
+              embedded
+            />
+            <BlocExperiences
+              key={experiences.map((e) => e.id).join(",")}
+              candidateId={candidat.id}
+              initialExperiences={experiences}
+              embedded
+            />
+            <BlocFormations
+              key={formations.map((f) => f.id).join(",")}
+              candidateId={candidat.id}
+              initialFormations={formations}
+              embedded
+            />
           </div>
         </section>
 
