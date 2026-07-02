@@ -40,7 +40,6 @@ export async function getRelancesData(scope: DashboardScope): Promise<{
 }> {
   const actor = await requireAuth();
   const now = new Date();
-  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
   const assigneeProfile = alias(profiles, "assignee");
   const ownerProfile = alias(profiles, "owner_p");
@@ -99,7 +98,7 @@ export async function getRelancesData(scope: DashboardScope): Promise<{
           and(
             inArray(candidates.status, ["to_call", "in_progress"]),
             isNull(candidates.deletedAt),
-            or(isNull(lastAct.lastAt), lt(lastAct.lastAt, sevenDaysAgo)),
+            or(isNull(lastAct.lastAt), sql`${lastAct.lastAt} < now() - interval '7 days'`),
             scope === "personal" ? eq(candidates.ownerId, actor.id) : undefined
           )
         )
@@ -318,7 +317,7 @@ export async function getPipelineCursusData(scope: DashboardScope, startYear?: n
       .where(
         and(
           isNull(candidates.deletedAt),
-          sql`${candidates.status} != ALL(ARRAY['definitive_refusal','temporary_refusal','contract_break']::text[])`,
+          sql`${candidates.status}::text != ALL(ARRAY['definitive_refusal','temporary_refusal','contract_break'])`,
           scope === "personal" ? eq(candidates.ownerId, actor.id) : undefined
         )
       )
