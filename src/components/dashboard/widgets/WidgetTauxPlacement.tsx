@@ -31,7 +31,7 @@ function KPI({ label, numerator, denominator }: { label: string; numerator: numb
   );
 }
 
-export function WidgetTauxPlacement({ scope }: { scope: DashboardScope }) {
+export function WidgetTauxPlacement({ scope, startYear }: { scope: DashboardScope; startYear?: number }) {
   const [data, setData] = useState<{
     candidatesPlaced: number; candidatesTotal: number;
     needsFilled: number; needsTotal: number; schoolYear: string;
@@ -39,8 +39,9 @@ export function WidgetTauxPlacement({ scope }: { scope: DashboardScope }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getTauxPlacementData(scope).then(setData).finally(() => setLoading(false));
-  }, [scope]);
+    setLoading(true);
+    getTauxPlacementData(scope, startYear).then(setData).finally(() => setLoading(false));
+  }, [scope, startYear]);
 
   if (loading) return <div className="flex items-center justify-center h-full"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>;
   if (!data) return null;

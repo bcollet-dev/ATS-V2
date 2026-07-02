@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { getPlacementsParClasseData } from "@/app/(app)/dashboard/widget-actions";
 import type { DashboardScope } from "@/app/(app)/dashboard/DashboardClient";
 
-export function WidgetPlacementsClasse({ scope }: { scope: DashboardScope }) {
+export function WidgetPlacementsClasse({ scope, startYear }: { scope: DashboardScope; startYear?: number }) {
   const [data, setData] = useState<{
     rows: { classId: string; className: string; cursusName: string; total: number }[];
     hasData: boolean;
@@ -14,8 +14,9 @@ export function WidgetPlacementsClasse({ scope }: { scope: DashboardScope }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getPlacementsParClasseData(scope).then(setData).finally(() => setLoading(false));
-  }, [scope]);
+    setLoading(true);
+    getPlacementsParClasseData(scope, startYear).then(setData).finally(() => setLoading(false));
+  }, [scope, startYear]);
 
   if (loading) return <div className="flex items-center justify-center h-full"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>;
   if (!data) return null;

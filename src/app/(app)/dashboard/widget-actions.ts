@@ -4,11 +4,11 @@ import { requireAuth } from "@/lib/auth";
 import { db } from "@/db";
 import {
   candidates, needs, tasks, activityEvents, matchings, classes, cursus,
-  profiles,
+  profiles, taskLinks,
 } from "@/db/schema";
-import { eq, and, isNull, lt, inArray, gte, lte, desc, asc, count, max, sql, or } from "drizzle-orm";
+import { eq, and, isNull, lt, inArray, gte, lte, desc, asc, count, max, sql, or, avg, ne } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { currentSchoolYear } from "@/lib/dashboard/school-year";
+import { currentSchoolYear, schoolYearFromStart } from "@/lib/dashboard/school-year";
 import type { DashboardScope } from "./DashboardClient";
 
 // ─── Relances ─────────────────────────────────────────────────────────────────
@@ -184,13 +184,13 @@ export async function getStatutsBesoinsData(scope: DashboardScope): Promise<{
 
 // ─── Besoins perdus ───────────────────────────────────────────────────────────
 
-export async function getBesoinsPerduData(scope: DashboardScope): Promise<{
+export async function getBesoinsPerduData(scope: DashboardScope, startYear?: number): Promise<{
   total: number;
   topMotifs: { motif: string; count: number }[];
   schoolYear: string;
 }> {
   const actor = await requireAuth();
-  const sy = currentSchoolYear();
+  const sy = startYear != null ? schoolYearFromStart(startYear) : currentSchoolYear();
 
   const baseWhere = and(
     eq(needs.status, "lost"),
@@ -226,7 +226,7 @@ export async function getBesoinsPerduData(scope: DashboardScope): Promise<{
 
 // ─── Taux de placement ────────────────────────────────────────────────────────
 
-export async function getTauxPlacementData(scope: DashboardScope): Promise<{
+export async function getTauxPlacementData(scope: DashboardScope, startYear?: number): Promise<{
   candidatesPlaced: number;
   candidatesTotal: number;
   needsFilled: number;
@@ -234,7 +234,7 @@ export async function getTauxPlacementData(scope: DashboardScope): Promise<{
   schoolYear: string;
 }> {
   const actor = await requireAuth();
-  const sy = currentSchoolYear();
+  const sy = startYear != null ? schoolYearFromStart(startYear) : currentSchoolYear();
 
   const candidateBase = and(
     isNull(candidates.deletedAt),
@@ -268,12 +268,12 @@ export async function getTauxPlacementData(scope: DashboardScope): Promise<{
 
 // ─── Sources du lead ──────────────────────────────────────────────────────────
 
-export async function getSourcesData(scope: DashboardScope): Promise<{
+export async function getSourcesData(scope: DashboardScope, startYear?: number): Promise<{
   sources: { source: string; count: number }[];
   schoolYear: string;
 }> {
   const actor = await requireAuth();
-  const sy = currentSchoolYear();
+  const sy = startYear != null ? schoolYearFromStart(startYear) : currentSchoolYear();
 
   const rows = await db
     .select({
@@ -302,11 +302,11 @@ export async function getSourcesData(scope: DashboardScope): Promise<{
 
 const ARCHIVED_STATUSES = ["definitive_refusal", "temporary_refusal", "contract_break"];
 
-export async function getPipelineCursusData(scope: DashboardScope): Promise<{
+export async function getPipelineCursusData(scope: DashboardScope, startYear?: number): Promise<{
   rows: { cursus: string; inPipeline: number; placed: number }[];
 }> {
   const actor = await requireAuth();
-  const sy = currentSchoolYear();
+  const sy = startYear != null ? schoolYearFromStart(startYear) : currentSchoolYear();
 
   const [pipelineRows, placedRows] = await Promise.all([
     db
@@ -357,12 +357,12 @@ export async function getPipelineCursusData(scope: DashboardScope): Promise<{
 
 // ─── Placements par classe ────────────────────────────────────────────────────
 
-export async function getPlacementsParClasseData(scope: DashboardScope): Promise<{
+export async function getPlacementsParClasseData(scope: DashboardScope, startYear?: number): Promise<{
   rows: { classId: string; className: string; cursusName: string; total: number }[];
   hasData: boolean;
 }> {
   const actor = await requireAuth();
-  const sy = currentSchoolYear();
+  const sy = startYear != null ? schoolYearFromStart(startYear) : currentSchoolYear();
 
   const ownerProfile = alias(profiles, "owner_p");
 
@@ -398,5 +398,258 @@ export async function getPlacementsParClasseData(scope: DashboardScope): Promise
       total: r.cnt,
     })),
     hasData: rows.length > 0,
+  };
+}
+
+// ─── Délai moyen de placement ─────────────────────────────────────────────────
+
+export async function getDelaiPlacementData(scope: DashboardScope, startYear?: number): Promise<{
+  avgDays: number | null;
+  byCursus: { cursus: string; avgDays: number }[];
+  schoolYear: string;
+}> {
+  const actor = await requireAuth();
+  const sy = startYear != null ? schoolYearFromStart(startYear) : currentSchoolYear();
+
+  const baseWhere = and(
+    isNull(candidates.deletedAt),
+    eq(candidates.status, "placed"),
+    gte(candidates.createdAt, sy.start),
+    lte(candidates.createdAt, sy.end),
+    scope === "personal" ? eq(candidates.ownerId, actor.id) : undefined
+  );
+
+  const [globalRow, cursusRows] = await Promise.all([
+    db
+      .select({
+        avg: sql<number>`ROUND(AVG(EXTRACT(EPOCH FROM (${candidates.updatedAt} - ${candidates.createdAt})) / 86400))`,
+      })
+      .from(candidates)
+      .where(baseWhere),
+    db
+      .select({
+        cursus: sql<string>`COALESCE(NULLIF(${candidates.cursusEnvisage}, ''), 'Non renseigné')`,
+        avg: sql<number>`ROUND(AVG(EXTRACT(EPOCH FROM (${candidates.updatedAt} - ${candidates.createdAt})) / 86400))`,
+      })
+      .from(candidates)
+      .where(baseWhere)
+      .groupBy(sql`COALESCE(NULLIF(${candidates.cursusEnvisage}, ''), 'Non renseigné')`)
+      .orderBy(sql`AVG(EXTRACT(EPOCH FROM (${candidates.updatedAt} - ${candidates.createdAt})))`)
+      .limit(6),
+  ]);
+
+  return {
+    avgDays: globalRow[0]?.avg ?? null,
+    byCursus: cursusRows.map((r) => ({ cursus: r.cursus, avgDays: r.avg })),
+    schoolYear: sy.label,
+  };
+}
+
+// ─── Taux de rupture ──────────────────────────────────────────────────────────
+
+export async function getTauxRuptureData(scope: DashboardScope, startYear?: number): Promise<{
+  ruptures: number;
+  placements: number;
+  schoolYear: string;
+}> {
+  const actor = await requireAuth();
+  const sy = startYear != null ? schoolYearFromStart(startYear) : currentSchoolYear();
+
+  const baseWhere = and(
+    isNull(candidates.deletedAt),
+    gte(candidates.createdAt, sy.start),
+    lte(candidates.createdAt, sy.end),
+    scope === "personal" ? eq(candidates.ownerId, actor.id) : undefined
+  );
+
+  const [ruptureRow, placedRow] = await Promise.all([
+    db.select({ cnt: count() }).from(candidates).where(and(baseWhere, eq(candidates.status, "contract_break"))),
+    db.select({ cnt: count() }).from(candidates).where(and(baseWhere, eq(candidates.status, "placed"))),
+  ]);
+
+  return {
+    ruptures: ruptureRow[0]?.cnt ?? 0,
+    placements: placedRow[0]?.cnt ?? 0,
+    schoolYear: sy.label,
+  };
+}
+
+// ─── Comparatif N / N-1 ───────────────────────────────────────────────────────
+
+export async function getComparatifData(scope: DashboardScope, startYear?: number): Promise<{
+  current: { label: string; candidatesPlaced: number; candidatesTotal: number; needsFilled: number; needsTotal: number };
+  previous: { label: string; candidatesPlaced: number; candidatesTotal: number; needsFilled: number; needsTotal: number };
+}> {
+  const actor = await requireAuth();
+  const sy = startYear != null ? schoolYearFromStart(startYear) : currentSchoolYear();
+  const syPrev = schoolYearFromStart(sy.startYear - 1);
+
+  async function fetchForYear(s: typeof sy) {
+    const base = (start: Date, end: Date) =>
+      and(
+        isNull(candidates.deletedAt),
+        gte(candidates.createdAt, start),
+        lte(candidates.createdAt, end),
+        scope === "personal" ? eq(candidates.ownerId, actor.id) : undefined
+      );
+    const needBase = (start: Date, end: Date) =>
+      and(
+        isNull(needs.deletedAt),
+        gte(needs.createdAt, start),
+        lte(needs.createdAt, end),
+        scope === "personal" ? eq(needs.ownerId, actor.id) : undefined
+      );
+
+    const [cTotal, cPlaced, nTotal, nFilled] = await Promise.all([
+      db.select({ cnt: count() }).from(candidates).where(base(s.start, s.end)),
+      db.select({ cnt: count() }).from(candidates).where(and(base(s.start, s.end), eq(candidates.status, "placed"))),
+      db.select({ cnt: count() }).from(needs).where(and(needBase(s.start, s.end), sql`${needs.status} != 'lost'`)),
+      db.select({ cnt: count() }).from(needs).where(and(needBase(s.start, s.end), eq(needs.status, "client"))),
+    ]);
+    return {
+      label: s.label,
+      candidatesTotal: cTotal[0]?.cnt ?? 0,
+      candidatesPlaced: cPlaced[0]?.cnt ?? 0,
+      needsTotal: nTotal[0]?.cnt ?? 0,
+      needsFilled: nFilled[0]?.cnt ?? 0,
+    };
+  }
+
+  const [current, previous] = await Promise.all([fetchForYear(sy), fetchForYear(syPrev)]);
+  return { current, previous };
+}
+
+// ─── Activité par conseiller ──────────────────────────────────────────────────
+
+export async function getActiviteConseillerData(scope: DashboardScope, startYear?: number): Promise<{
+  rows: { userId: string; name: string; events: number; tasksCompleted: number }[];
+  schoolYear: string;
+}> {
+  const actor = await requireAuth();
+  const sy = startYear != null ? schoolYearFromStart(startYear) : currentSchoolYear();
+
+  const [eventRows, taskRows] = await Promise.all([
+    db
+      .select({
+        userId: activityEvents.actorId,
+        name: profiles.fullName,
+        cnt: count(),
+      })
+      .from(activityEvents)
+      .innerJoin(profiles, eq(activityEvents.actorId, profiles.id))
+      .where(
+        and(
+          gte(activityEvents.createdAt, sy.start),
+          lte(activityEvents.createdAt, sy.end),
+          scope === "personal" ? eq(activityEvents.actorId, actor.id) : undefined
+        )
+      )
+      .groupBy(activityEvents.actorId, profiles.fullName)
+      .orderBy(desc(count())),
+
+    db
+      .select({
+        userId: tasks.assignedTo,
+        cnt: count(),
+      })
+      .from(tasks)
+      .where(
+        and(
+          isNull(tasks.deletedAt),
+          sql`${tasks.completedAt} IS NOT NULL`,
+          gte(tasks.completedAt, sy.start),
+          lte(tasks.completedAt, sy.end),
+          scope === "personal" ? eq(tasks.assignedTo, actor.id) : undefined
+        )
+      )
+      .groupBy(tasks.assignedTo),
+  ]);
+
+  const taskMap = new Map(taskRows.map((r) => [r.userId, r.cnt]));
+
+  return {
+    rows: eventRows.map((r) => ({
+      userId: r.userId ?? "",
+      name: r.name ?? "Inconnu",
+      events: r.cnt,
+      tasksCompleted: taskMap.get(r.userId ?? "") ?? 0,
+    })),
+    schoolYear: sy.label,
+  };
+}
+
+// ─── Nouvelles inscriptions ───────────────────────────────────────────────────
+
+export async function getNouvellesInscriptionsData(scope: DashboardScope): Promise<{
+  last7: number;
+  last30: number;
+  prev7: number;
+  prev30: number;
+}> {
+  const actor = await requireAuth();
+  const now = new Date();
+  const d7 = new Date(now.getTime() - 7 * 86400_000);
+  const d14 = new Date(now.getTime() - 14 * 86400_000);
+  const d30 = new Date(now.getTime() - 30 * 86400_000);
+  const d60 = new Date(now.getTime() - 60 * 86400_000);
+
+  const base = (start: Date, end: Date) =>
+    and(
+      isNull(candidates.deletedAt),
+      gte(candidates.createdAt, start),
+      lte(candidates.createdAt, end),
+      scope === "personal" ? eq(candidates.ownerId, actor.id) : undefined
+    );
+
+  const [r7, r30, p7, p30] = await Promise.all([
+    db.select({ cnt: count() }).from(candidates).where(base(d7, now)),
+    db.select({ cnt: count() }).from(candidates).where(base(d30, now)),
+    db.select({ cnt: count() }).from(candidates).where(base(d14, d7)),
+    db.select({ cnt: count() }).from(candidates).where(base(d60, d30)),
+  ]);
+
+  return {
+    last7: r7[0]?.cnt ?? 0,
+    last30: r30[0]?.cnt ?? 0,
+    prev7: p7[0]?.cnt ?? 0,
+    prev30: p30[0]?.cnt ?? 0,
+  };
+}
+
+// ─── Nouveaux besoins ─────────────────────────────────────────────────────────
+
+export async function getNouveauxBesoinsData(scope: DashboardScope): Promise<{
+  last7: number;
+  last30: number;
+  prev7: number;
+  prev30: number;
+}> {
+  const actor = await requireAuth();
+  const now = new Date();
+  const d7 = new Date(now.getTime() - 7 * 86400_000);
+  const d14 = new Date(now.getTime() - 14 * 86400_000);
+  const d30 = new Date(now.getTime() - 30 * 86400_000);
+  const d60 = new Date(now.getTime() - 60 * 86400_000);
+
+  const base = (start: Date, end: Date) =>
+    and(
+      isNull(needs.deletedAt),
+      gte(needs.createdAt, start),
+      lte(needs.createdAt, end),
+      scope === "personal" ? eq(needs.ownerId, actor.id) : undefined
+    );
+
+  const [r7, r30, p7, p30] = await Promise.all([
+    db.select({ cnt: count() }).from(needs).where(base(d7, now)),
+    db.select({ cnt: count() }).from(needs).where(base(d30, now)),
+    db.select({ cnt: count() }).from(needs).where(base(d14, d7)),
+    db.select({ cnt: count() }).from(needs).where(base(d60, d30)),
+  ]);
+
+  return {
+    last7: r7[0]?.cnt ?? 0,
+    last30: r30[0]?.cnt ?? 0,
+    prev7: p7[0]?.cnt ?? 0,
+    prev30: p30[0]?.cnt ?? 0,
   };
 }

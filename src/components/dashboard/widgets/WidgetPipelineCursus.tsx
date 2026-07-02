@@ -6,13 +6,14 @@ import { cn } from "@/lib/utils";
 import { getPipelineCursusData } from "@/app/(app)/dashboard/widget-actions";
 import type { DashboardScope } from "@/app/(app)/dashboard/DashboardClient";
 
-export function WidgetPipelineCursus({ scope }: { scope: DashboardScope }) {
+export function WidgetPipelineCursus({ scope, startYear }: { scope: DashboardScope; startYear?: number }) {
   const [data, setData] = useState<{ rows: { cursus: string; inPipeline: number; placed: number }[] } | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getPipelineCursusData(scope).then(setData).finally(() => setLoading(false));
-  }, [scope]);
+    setLoading(true);
+    getPipelineCursusData(scope, startYear).then(setData).finally(() => setLoading(false));
+  }, [scope, startYear]);
 
   if (loading) return <div className="flex items-center justify-center h-full"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>;
   if (!data || data.rows.length === 0) {

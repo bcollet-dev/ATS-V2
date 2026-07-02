@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { Responsive, WidthProvider, type LayoutItem } from "react-grid-layout/legacy";
-import { Plus, Pencil, Check, Users, Globe } from "lucide-react";
+import { Plus, Pencil, Check, Users, Globe, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -10,6 +10,7 @@ import { WidgetShell } from "@/components/dashboard/WidgetShell";
 import { WidgetLibraryDrawer } from "@/components/dashboard/WidgetLibraryDrawer";
 import { WidgetRenderer } from "@/components/dashboard/WidgetRenderer";
 import { updateWidgetLayout, deleteWidget, addWidget, type WidgetConfig } from "./actions";
+import { currentSchoolYear, availableSchoolYears } from "@/lib/dashboard/school-year";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 
@@ -33,6 +34,8 @@ const WIDGET_TITLES: Record<string, string> = {
   sources_lead:      "Sources du lead",
 };
 
+const SCHOOL_YEARS = availableSchoolYears(4);
+
 export function DashboardClient({ initialWidgets, role }: Props) {
   const [widgets, setWidgets] = useState<WidgetConfig[]>(initialWidgets);
   const [editMode, setEditMode] = useState(false);
@@ -40,6 +43,7 @@ export function DashboardClient({ initialWidgets, role }: Props) {
   const [scope, setScope] = useState<DashboardScope>(
     role === "admissions" || role === "relations_entreprises" ? "personal" : "global"
   );
+  const [selectedStartYear, setSelectedStartYear] = useState<number>(currentSchoolYear().startYear);
 
   const canToggleScope = role === "team_leader";
   const forcePersonal = role === "admissions" || role === "relations_entreprises";
@@ -146,6 +150,22 @@ export function DashboardClient({ initialWidgets, role }: Props) {
           </div>
         )}
 
+        {/* Sélecteur d'année scolaire */}
+        <div className="relative">
+          <select
+            value={selectedStartYear}
+            onChange={(e) => setSelectedStartYear(Number(e.target.value))}
+            className="appearance-none h-8 rounded-md border border-input bg-background pl-3 pr-7 text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-ring cursor-pointer"
+          >
+            {SCHOOL_YEARS.map((sy) => (
+              <option key={sy.startYear} value={sy.startYear}>
+                {sy.label}
+              </option>
+            ))}
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+        </div>
+
         <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setLibraryOpen(true)}>
           <Plus className="h-3.5 w-3.5" />
           Ajouter un widget
@@ -205,7 +225,7 @@ export function DashboardClient({ initialWidgets, role }: Props) {
                   onDelete={() => handleDelete(widget.id)}
                   className={cn(editMode && "drag-handle")}
                 >
-                  <WidgetRenderer widget={widget} scope={scope} />
+                  <WidgetRenderer widget={widget} scope={scope} startYear={selectedStartYear} />
                 </WidgetShell>
               </div>
             ))}

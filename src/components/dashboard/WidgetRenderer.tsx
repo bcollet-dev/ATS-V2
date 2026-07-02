@@ -9,28 +9,47 @@ import { WidgetTauxPlacement } from "./widgets/WidgetTauxPlacement";
 import { WidgetSources } from "./widgets/WidgetSources";
 import { WidgetPipelineCursus } from "./widgets/WidgetPipelineCursus";
 import { WidgetPlacementsClasse } from "./widgets/WidgetPlacementsClasse";
+import { WidgetDelaiPlacement } from "./widgets/WidgetDelaiPlacement";
+import { WidgetTauxRupture } from "./widgets/WidgetTauxRupture";
+import { WidgetComparatif } from "./widgets/WidgetComparatif";
+import { WidgetActiviteConseillers } from "./widgets/WidgetActiviteConseillers";
+import { WidgetNouvellesInscriptions } from "./widgets/WidgetNouvellesInscriptions";
+import { WidgetNouveauxBesoins } from "./widgets/WidgetNouveauxBesoins";
 
 interface WidgetRendererProps {
   widget: WidgetConfig;
   scope: DashboardScope;
+  startYear: number;
 }
 
-export function WidgetRenderer({ widget, scope }: WidgetRendererProps) {
+export function WidgetRenderer({ widget, scope, startYear }: WidgetRendererProps) {
   switch (widget.widgetType) {
     case "relances":
       return <WidgetRelances scope={scope} />;
     case "statuts_besoins":
       return <WidgetStatutsBesoins scope={scope} />;
     case "besoins_perdus":
-      return <WidgetBesoinsLost scope={scope} />;
+      return <WidgetBesoinsLost scope={scope} startYear={startYear} />;
     case "taux_placement":
-      return <WidgetTauxPlacement scope={scope} />;
+      return <WidgetTauxPlacement scope={scope} startYear={startYear} />;
     case "sources_lead":
-      return <WidgetSources scope={scope} />;
+      return <WidgetSources scope={scope} startYear={startYear} />;
     case "pipeline_cursus":
-      return <WidgetPipelineCursus scope={scope} />;
+      return <WidgetPipelineCursus scope={scope} startYear={startYear} />;
     case "placements_classe":
-      return <WidgetPlacementsClasse scope={scope} />;
+      return <WidgetPlacementsClasse scope={scope} startYear={startYear} />;
+    case "delai_placement":
+      return <WidgetDelaiPlacement scope={scope} startYear={startYear} />;
+    case "taux_rupture":
+      return <WidgetTauxRupture scope={scope} startYear={startYear} />;
+    case "comparatif_annees":
+      return <WidgetComparatif scope={scope} startYear={startYear} />;
+    case "activite_conseillers":
+      return <WidgetActiviteConseillers scope={scope} startYear={startYear} />;
+    case "nouvelles_inscriptions":
+      return <WidgetNouvellesInscriptions scope={scope} />;
+    case "nouveaux_besoins":
+      return <WidgetNouveauxBesoins scope={scope} />;
     default:
       return (
         <div className="flex items-center justify-center h-full text-sm text-muted-foreground">

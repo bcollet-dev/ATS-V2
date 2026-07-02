@@ -5,13 +5,14 @@ import { Loader2 } from "lucide-react";
 import { getBesoinsPerduData } from "@/app/(app)/dashboard/widget-actions";
 import type { DashboardScope } from "@/app/(app)/dashboard/DashboardClient";
 
-export function WidgetBesoinsLost({ scope }: { scope: DashboardScope }) {
+export function WidgetBesoinsLost({ scope, startYear }: { scope: DashboardScope; startYear?: number }) {
   const [data, setData] = useState<{ total: number; topMotifs: { motif: string; count: number }[]; schoolYear: string } | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getBesoinsPerduData(scope).then(setData).finally(() => setLoading(false));
-  }, [scope]);
+    setLoading(true);
+    getBesoinsPerduData(scope, startYear).then(setData).finally(() => setLoading(false));
+  }, [scope, startYear]);
 
   if (loading) return <div className="flex items-center justify-center h-full"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>;
   if (!data) return null;

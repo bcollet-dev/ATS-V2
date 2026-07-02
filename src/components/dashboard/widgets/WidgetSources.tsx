@@ -19,13 +19,14 @@ const ResponsiveContainer = dynamic(
   { ssr: false }
 );
 
-export function WidgetSources({ scope }: { scope: DashboardScope }) {
+export function WidgetSources({ scope, startYear }: { scope: DashboardScope; startYear?: number }) {
   const [data, setData] = useState<{ sources: { source: string; count: number }[]; schoolYear: string } | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getSourcesData(scope).then(setData).finally(() => setLoading(false));
-  }, [scope]);
+    setLoading(true);
+    getSourcesData(scope, startYear).then(setData).finally(() => setLoading(false));
+  }, [scope, startYear]);
 
   if (loading) return <div className="flex items-center justify-center h-full"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>;
   if (!data || data.sources.length === 0) {
