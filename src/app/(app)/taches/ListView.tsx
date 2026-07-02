@@ -41,7 +41,7 @@ function formatDate(iso: string) {
 function getColValue(task: TaskFull, col: SortKey): string {
   switch (col) {
     case "title":    return task.title;
-    case "entity":   return task.candidateFirstName ? `${task.candidateFirstName} ${task.candidateLastName}` : task.companyName ?? "";
+    case "entity":   return task.attachments.map((attachment) => attachment.label).join(", ");
     case "assignee": return task.assigneeName ?? "—";
     case "dueAt":    return task.completedAt ?? task.dueAt;
     case "status":   return STATUS_META[getStatus(task)].label;
@@ -336,9 +336,11 @@ export function ListView({ tasks, onSelect }: { tasks: TaskFull[]; onSelect: (t:
                 const Icon = CATEGORY_ICONS[task.category] ?? MoreHorizontal;
                 const status = getStatus(task);
                 const meta = STATUS_META[status];
-                const entityName = task.candidateFirstName
-                  ? `${task.candidateFirstName} ${task.candidateLastName}`
-                  : task.companyName ?? "—";
+                const attachmentLabels = task.attachments.slice(0, 2).map((attachment) => attachment.label);
+                const extraAttachments = task.attachments.length - attachmentLabels.length;
+                const entityName = attachmentLabels.length > 0
+                  ? `${attachmentLabels.join(", ")}${extraAttachments > 0 ? ` +${extraAttachments}` : ""}`
+                  : "—";
                 const dateToShow = task.completedAt ?? task.dueAt;
 
                 return (

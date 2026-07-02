@@ -1,7 +1,7 @@
 import { db } from "@/db";
 import { activityEvents, profiles } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
-import { History, Pencil, ListTodo, RefreshCw, Trash2, UserPlus, ArrowRight } from "lucide-react";
+import { History, Pencil, ListTodo, RefreshCw, Trash2, UserPlus, ArrowRight, Mail } from "lucide-react";
 import Link from "next/link";
 
 const ACTION_META: Record<string, { Icon: React.FC<{ className?: string }>; color: string }> = {
@@ -10,6 +10,7 @@ const ACTION_META: Record<string, { Icon: React.FC<{ className?: string }>; colo
   "task.created":       { Icon: ListTodo,   color: "text-orange-600 bg-orange-50" },
   "task.updated":       { Icon: RefreshCw,  color: "text-orange-600 bg-orange-50" },
   "task.deleted":       { Icon: Trash2,     color: "text-red-600 bg-red-50" },
+  "email_sent":         { Icon: Mail,       color: "text-sky-600 bg-sky-50" },
 };
 
 function relativeDate(d: Date): string {

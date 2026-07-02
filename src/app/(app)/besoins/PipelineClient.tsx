@@ -2,14 +2,16 @@
 
 import { useState, useTransition, useOptimistic, useEffect } from "react";
 import Link from "next/link";
-import { Briefcase, Archive, LayoutGrid, List, Plus, Check } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Briefcase, Archive, LayoutGrid, List, Plus, Check, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Modal, ModalContent, ModalHeader, ModalTitle, ModalBody, ModalFooter } from "@/components/ui/modal";
 import { Label } from "@/components/ui/label";
-import { updateNeedStatus, type NeedRow } from "./actions";
+import { permanentlyDeleteNeed, updateNeedStatus, type NeedRow } from "./actions";
 import {
   loadMatchingsForNeed,
+  markMatchingWinner,
   updateMatchingStatus,
   deleteAllMatchingsForNeed,
 } from "@/app/(app)/matching/actions";
@@ -17,6 +19,10 @@ import { updateCandidateStatus } from "@/app/(app)/candidats/actions";
 import { KanbanPipeline } from "./KanbanPipeline";
 import { PipelineList } from "./PipelineList";
 import { NeedDrawer } from "./NeedDrawer";
+import { YpareoPlacementModal } from "@/components/ypareo/YpareoPlacementModal";
+import { pushYpareoPlacement } from "@/app/(app)/ypareo/actions";
+import type { YpareoPlacementDraft } from "@/lib/ypareo/placement-draft";
+import { toast } from "sonner";
 
 const ARCHIVED = new Set(["lost"]);
 type ViewMode = "kanban" | "list";
@@ -33,12 +39,14 @@ function LostModal({
   needTitle,
   activeMatchingsCount,
   onConfirm,
+  onDelete,
   onCancel,
 }: {
   open: boolean;
   needTitle: string;
   activeMatchingsCount: number;
   onConfirm: (reason: string) => void;
+  onDelete: () => void;
   onCancel: () => void;
 }) {
   const [reason, setReason] = useState("");
@@ -53,6 +61,11 @@ function LostModal({
 
   function handleCancel() {
     setReason(""); setError(false); onCancel();
+  }
+
+  function handleDelete() {
+    setReason(""); setError(false);
+    onDelete();
   }
 
   return (
@@ -84,6 +97,18 @@ function LostModal({
           </div>
         </ModalBody>
         <ModalFooter>
+          <Button
+            variant="ghost"
+            className="mr-auto text-destructive hover:bg-destructive/10 hover:text-destructive"
+            onClick={() => {
+              if (window.confirm(`Supprimer définitivement ${needTitle} ? Cette action ne pourra pas être annulée.`)) {
+                handleDelete();
+              }
+            }}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Supprimer
+          </Button>
           <Button variant="outline" onClick={handleCancel}>Annuler</Button>
           <Button variant="destructive" onClick={handleConfirm}>Confirmer</Button>
         </ModalFooter>
@@ -430,6 +455,7 @@ export function PipelineClient({
   profiles: { id: string; fullName: string }[];
   companies: { id: string; name: string }[];
 }) {
+  const router = useRouter();
   const [tab, setTab] = useState<Tab>("pipeline");
   const [view, setView] = useState<ViewMode>("kanban");
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -443,6 +469,7 @@ export function PipelineClient({
   const [pendingDegrade, setPendingDegrade] = useState<{
     id: string; status: string; title: string; matchingsCount: number;
   } | null>(null);
+  const [pendingYpareo, setPendingYpareo] = useState<{ id: string } | null>(null);
   const [, startTransition] = useTransition();
 
   const [needs, setOptimistic] = useOptimistic(
@@ -474,6 +501,10 @@ export function PipelineClient({
         });
         return;
       }
+    }
+    if (status === "client") {
+      setPendingYpareo({ id });
+      return;
     }
     if (status === "interview") {
       const need = needs.find((n) => n.id === id);
@@ -526,6 +557,24 @@ export function PipelineClient({
     });
   }
 
+  function handlePendingDelete() {
+    if (!pending) return;
+    const { id } = pending;
+    setPending(null);
+    startTransition(async () => {
+      setOptimistic({ id, status: "lost" });
+      await updateNeedStatus(id, "lost", "Suppression définitive");
+      const result = await permanentlyDeleteNeed(id);
+      if (!result.success) {
+        toast.error(result.error ?? "Suppression définitive impossible");
+        router.refresh();
+        return;
+      }
+      toast.success("Besoin supprimé définitivement");
+      router.refresh();
+    });
+  }
+
   function handleRetenuConfirm(matchingId: string, candidateId: string) {
     if (!pendingRetenu) return;
     const { id } = pendingRetenu;
@@ -560,6 +609,23 @@ export function PipelineClient({
       setOptimistic({ id, status });
       await deleteAllMatchingsForNeed(id);
       await updateNeedStatus(id, status);
+    });
+  }
+
+  function handleYpareoConfirm(draft: YpareoPlacementDraft, selectedClassId: string | null) {
+    if (!pendingYpareo) return;
+    const { id } = pendingYpareo;
+    setPendingYpareo(null);
+    pushYpareoPlacement(draft, selectedClassId).then((result) => {
+      if (!result.success) toast.error(result.error ?? "Erreur lors de l'envoi sur Ypareo");
+    }).catch(() => {
+      toast.error("Erreur lors de l'envoi sur Ypareo");
+    });
+    startTransition(async () => {
+      setOptimistic({ id, status: "client" });
+      if (draft.matchingId) await markMatchingWinner(draft.matchingId);
+      if (draft.candidateId) await updateCandidateStatus(draft.candidateId, "placed");
+      await updateNeedStatus(id, "client");
     });
   }
 
@@ -664,6 +730,7 @@ export function PipelineClient({
         needTitle={pendingTitle}
         activeMatchingsCount={pending?.activeMatchingsCount ?? 0}
         onConfirm={handleConfirm}
+        onDelete={handlePendingDelete}
         onCancel={() => setPending(null)}
       />
 
@@ -692,6 +759,15 @@ export function PipelineClient({
         matchingsCount={pendingDegrade?.matchingsCount ?? 0}
         onConfirm={handleDegradeConfirm}
         onCancel={() => setPendingDegrade(null)}
+      />
+
+      <YpareoPlacementModal
+        open={!!pendingYpareo}
+        source="need"
+        sourceId={pendingYpareo?.id ?? null}
+        targetLabel="Client"
+        onCancel={() => setPendingYpareo(null)}
+        onConfirm={handleYpareoConfirm}
       />
     </div>
   );

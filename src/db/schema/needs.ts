@@ -41,6 +41,28 @@ export const needs = pgTable(
     lostReason: text("lost_reason"),
     notes: text("notes"),
 
+    // Maître d'apprentissage
+    masterFirstName: text("master_first_name"),
+    masterLastName: text("master_last_name"),
+    masterBirthName: text("master_birth_name"),
+    masterBirthDate: date("master_birth_date"),
+    masterJobTitle: text("master_job_title"),
+    masterPhone: text("master_phone"),
+    masterEmail: text("master_email"),
+
+    // Contrat CERFA FA13
+    weeklyHours: text("weekly_hours"),
+    contractType: text("contract_type"),
+    salaryReference: text("salary_reference"),
+    smcAmount: text("smc_amount"),
+    overtimeHandling: text("overtime_handling"),
+    endDate: date("end_date"),
+
+    // Avantages en nature
+    benefitFood: text("benefit_food"),
+    benefitHousing: text("benefit_housing"),
+    benefitOther: text("benefit_other"),
+
     ypareoNeedId: text("ypareo_need_id"),
 
     createdBy: uuid("created_by").references(() => profiles.id, { onDelete: "set null" }),

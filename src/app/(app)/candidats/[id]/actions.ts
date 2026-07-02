@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/db";
-import { candidates, activityEvents, documents } from "@/db/schema";
+import { candidates, activityEvents, documents, taskLinks } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
@@ -174,6 +174,85 @@ export async function updateRecrutement(
 }
 
 // ─── Représentant légal ───────────────────────────────────────────────────────
+
+export async function deleteCandidate(
+  candidateId: string
+): Promise<{ success: boolean; error?: string }> {
+  const user = await getCurrentUser();
+  if (!user) return { success: false, error: "Non authentifie" };
+
+  const [candidate] = await db
+    .select({
+      firstName: candidates.firstName,
+      lastName: candidates.lastName,
+      deletedAt: candidates.deletedAt,
+    })
+    .from(candidates)
+    .where(eq(candidates.id, candidateId))
+    .limit(1);
+
+  if (!candidate) return { success: false, error: "Candidat introuvable" };
+  if (candidate.deletedAt) return { success: true };
+
+  await db
+    .update(candidates)
+    .set({ deletedAt: new Date(), updatedAt: new Date() })
+    .where(eq(candidates.id, candidateId));
+
+  await db.insert(activityEvents).values({
+    actorId: user.id,
+    candidateId,
+    actionType: "candidate.deleted",
+    summary: `Candidat ${candidate.firstName} ${candidate.lastName} supprime par ${user.fullName}`,
+  });
+
+  revalidatePath(`/candidats/${candidateId}`);
+  revalidatePath("/candidats");
+  revalidatePath("/annuaire");
+  revalidatePath("/besoins");
+  revalidatePath("/matching");
+  revalidatePath("/taches");
+  return { success: true };
+}
+
+const HARD_DELETE_STATUSES = new Set(["temporary_refusal", "definitive_refusal"]);
+
+export async function permanentlyDeleteCandidate(
+  candidateId: string
+): Promise<{ success: boolean; error?: string }> {
+  const user = await getCurrentUser();
+  if (!user) return { success: false, error: "Non authentifie" };
+
+  const [candidate] = await db
+    .select({
+      status: candidates.status,
+    })
+    .from(candidates)
+    .where(eq(candidates.id, candidateId))
+    .limit(1);
+
+  if (!candidate) return { success: false, error: "Candidat introuvable" };
+  if (!HARD_DELETE_STATUSES.has(candidate.status)) {
+    return { success: false, error: "Le candidat doit d'abord etre archive" };
+  }
+
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(taskLinks)
+      .where(and(eq(taskLinks.entityType, "candidate"), eq(taskLinks.entityId, candidateId)));
+
+    await tx
+      .delete(candidates)
+      .where(eq(candidates.id, candidateId));
+  });
+
+  revalidatePath("/candidats");
+  revalidatePath("/annuaire");
+  revalidatePath("/besoins");
+  revalidatePath("/matching");
+  revalidatePath("/taches");
+  return { success: true };
+}
 
 export type UpdateRepresentantLegalInput = {
   legalRepFirstName: string;

@@ -2,6 +2,29 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* ── Tiptap rich-text editor ──────────────────────────────────────────────── */
+.tiptap-editor .ProseMirror {
+  outline: none;
+  min-height: 160px;
+  padding: 0.625rem 0.75rem;
+}
+.tiptap-editor .ProseMirror p { margin: 0 0 0.4em; }
+.tiptap-editor .ProseMirror p:last-child { margin-bottom: 0; }
+.tiptap-editor .ProseMirror ul { list-style: disc;     padding-left: 1.4em; margin: 0 0 0.4em; }
+.tiptap-editor .ProseMirror ol { list-style: decimal;  padding-left: 1.4em; margin: 0 0 0.4em; }
+.tiptap-editor .ProseMirror li { margin: 0 0 0.15em; }
+.tiptap-editor .ProseMirror strong { font-weight: 600; }
+.tiptap-editor .ProseMirror em { font-style: italic; }
+.tiptap-editor .ProseMirror u  { text-decoration: underline; }
+.tiptap-editor .ProseMirror a  { color: var(--color-primary, #2563eb); text-decoration: underline; }
+.tiptap-editor .ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--muted-foreground);
+  pointer-events: none;
+  float: left;
+  height: 0;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme {

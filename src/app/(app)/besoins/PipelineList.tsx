@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useRef, useEffect, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ChevronUp, ChevronDown, MoreHorizontal,
   SlidersHorizontal, Check, Search,
@@ -14,6 +15,7 @@ import {
 import {
   updateNeedTitle, updateNeedCursus, updateNeedOwner, updateNeedCity, type NeedRow,
 } from "./actions";
+import { PermanentDeleteEntityButton } from "@/components/entities/PermanentDeleteEntityButton";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -458,6 +460,7 @@ export function PipelineList({
   cursus: { id: string; name: string }[];
   profiles: { id: string; fullName: string }[];
 }) {
+  const router = useRouter();
   const [filters, setFilters] = useState<Map<FilterKey, Set<string> | null>>(new Map());
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir } | null>({ key: "title", dir: "asc" });
   const [, startTransition] = useTransition();
@@ -593,18 +596,27 @@ export function PipelineList({
                         </DropdownMenuContent>
                       </DropdownMenu>
                     ) : (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger className="h-7 w-7 rounded flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent side="bottom" align="end">
-                          <DropdownMenuGroup>
-                            <DropdownMenuLabel>Remettre dans pipeline</DropdownMenuLabel>
-                            <DropdownMenuItem onClick={() => onStatusChange(n.id, "ad_chase")}>Ad Chase</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => onStatusChange(n.id, "prospect")}>Prospect</DropdownMenuItem>
-                          </DropdownMenuGroup>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      <div className="flex items-center gap-1">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger className="h-7 w-7 rounded flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent side="bottom" align="end">
+                            <DropdownMenuGroup>
+                              <DropdownMenuLabel>Remettre dans pipeline</DropdownMenuLabel>
+                              <DropdownMenuItem onClick={() => onStatusChange(n.id, "ad_chase")}>Ad Chase</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => onStatusChange(n.id, "prospect")}>Prospect</DropdownMenuItem>
+                            </DropdownMenuGroup>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                        <PermanentDeleteEntityButton
+                          entityType="need"
+                          entityId={n.id}
+                          label={`${n.title} - ${n.companyName}`}
+                          iconOnly
+                          onDeleted={() => router.refresh()}
+                        />
+                      </div>
                     )}
                   </td>
                 </tr>

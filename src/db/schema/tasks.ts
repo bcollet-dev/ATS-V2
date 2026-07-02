@@ -3,11 +3,10 @@ import {
   uuid,
   text,
   timestamp,
-  check,
   index,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
-import { sql } from "drizzle-orm";
-import { taskCategory } from "./enums";
+import { taskCategory, taskLinkEntityType } from "./enums";
 import { profiles } from "./profiles";
 import { candidates } from "./candidates";
 import { companies } from "./companies";
@@ -37,13 +36,25 @@ export const tasks = pgTable(
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
   },
   (t) => [
-    check(
-      "tasks_one_entity_check",
-      sql`num_nonnulls(${t.candidateId}, ${t.companyId}, ${t.needId}) >= 1`
-    ),
     index("tasks_assigned_to_idx").on(t.assignedTo),
     index("tasks_due_at_idx").on(t.dueAt),
     index("tasks_candidate_idx").on(t.candidateId),
     index("tasks_company_idx").on(t.companyId),
+  ]
+);
+
+export const taskLinks = pgTable(
+  "task_links",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    taskId: uuid("task_id").notNull().references(() => tasks.id, { onDelete: "cascade" }),
+    entityType: taskLinkEntityType("entity_type").notNull(),
+    entityId: uuid("entity_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("task_links_unique_idx").on(t.taskId, t.entityType, t.entityId),
+    index("task_links_task_idx").on(t.taskId),
+    index("task_links_entity_idx").on(t.entityType, t.entityId),
   ]
 );

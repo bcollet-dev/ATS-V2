@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useTransition, useOptimistic } from "react";
 import Link from "next/link";
-import { Plus, Trash2, Trophy, Lock, Check, Search, Info } from "lucide-react";
+import { Plus, Trash2, Trophy, Lock, Check, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Modal, ModalContent, ModalHeader, ModalTitle, ModalBody, ModalFooter } from "@/components/ui/modal";
@@ -50,9 +50,7 @@ const PIPELINE_STATUSES = [
   { key: "not_retained", label: "Non retenu" },
 ];
 
-const MATCHING_ALLOWED_STATUSES = new Set([
-  "need_in_progress", "interview", "waiting_fre", "client", "rupture",
-]);
+const EARLY_STATUSES = new Set(["ad_chase", "prospect"]);
 
 // ─── Status Picker ────────────────────────────────────────────────────────────
 
@@ -378,23 +376,22 @@ export function BlocPropositions({
             {matchings.length}
           </span>
         </h2>
-        {MATCHING_ALLOWED_STATUSES.has(needStatus) ? (
+        {EARLY_STATUSES.has(needStatus) ? (
+          <p className="text-xs text-muted-foreground max-w-[260px] text-right">
+            Le rattachement est disponible à partir du statut Besoin en cours.
+          </p>
+        ) : needStatus !== "lost" ? (
           <Button size="sm" variant="outline" className="gap-1.5 h-7 text-xs" onClick={() => setAddOpen(true)}>
             <Plus className="h-3.5 w-3.5" />
             Proposer un candidat
           </Button>
-        ) : needStatus !== "lost" ? (
-          <p className="flex items-center gap-1 text-xs text-muted-foreground">
-            <Info className="h-3 w-3 shrink-0" />
-            Disponible à partir de &quot;Besoin en cours&quot;
-          </p>
         ) : null}
       </div>
 
       {matchings.length === 0 ? (
         <div className="px-5 py-10 text-center">
           <p className="text-sm text-muted-foreground">Aucun candidat proposé sur ce besoin.</p>
-          {MATCHING_ALLOWED_STATUSES.has(needStatus) && (
+          {!EARLY_STATUSES.has(needStatus) && needStatus !== "lost" && (
             <button onClick={() => setAddOpen(true)} className="mt-2 text-sm text-primary hover:underline">
               Proposer le premier candidat
             </button>

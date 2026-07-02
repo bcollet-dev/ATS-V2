@@ -2,18 +2,23 @@
 
 import { useState, useTransition, useOptimistic } from "react";
 import { useRouter } from "next/navigation";
-import { LayoutGrid, List, Plus, Archive, Users } from "lucide-react";
+import { LayoutGrid, List, Plus, Archive, Users, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Modal, ModalContent, ModalHeader, ModalTitle, ModalBody, ModalFooter } from "@/components/ui/modal";
 import { Label } from "@/components/ui/label";
 import { CandidatDrawer } from "@/components/candidat-drawer";
 import { updateCandidateStatus, type CandidatRow } from "./actions";
-import { deleteAllMatchingsForCandidate, updateMatchingStatus } from "@/app/(app)/matching/actions";
+import { permanentlyDeleteCandidate } from "@/app/(app)/candidats/[id]/actions";
+import { deleteAllMatchingsForCandidate, markMatchingWinner, updateMatchingStatus } from "@/app/(app)/matching/actions";
 import { updateNeedStatus } from "@/app/(app)/besoins/actions";
 import { KanbanPipeline } from "./KanbanPipeline";
 import { PipelineList } from "./PipelineList";
 import { RefusModal } from "./RefusModal";
+import { YpareoPlacementModal } from "@/components/ypareo/YpareoPlacementModal";
+import { pushYpareoPlacement } from "@/app/(app)/ypareo/actions";
+import type { YpareoPlacementDraft } from "@/lib/ypareo/placement-draft";
+import { toast } from "sonner";
 
 const ARCHIVED = new Set(["temporary_refusal", "definitive_refusal"]);
 const PRE_ADMISSIBLE = new Set(["to_call", "in_progress", "no_response", "pvpp"]);
@@ -25,11 +30,13 @@ function ArchiveDragModal({
   open,
   candidateName,
   onConfirm,
+  onDelete,
   onCancel,
 }: {
   open: boolean;
   candidateName: string;
   onConfirm: (type: "temporary_refusal" | "definitive_refusal", reason: string) => void;
+  onDelete: () => void;
   onCancel: () => void;
 }) {
   const [type, setType] = useState<"temporary_refusal" | "definitive_refusal">("temporary_refusal");
@@ -45,6 +52,11 @@ function ArchiveDragModal({
 
   function handleCancel() {
     setReason(""); setError(false); onCancel();
+  }
+
+  function handleDelete() {
+    setReason(""); setError(false);
+    onDelete();
   }
 
   return (
@@ -99,6 +111,18 @@ function ArchiveDragModal({
           </div>
         </ModalBody>
         <ModalFooter>
+          <Button
+            variant="ghost"
+            className="mr-auto text-destructive hover:bg-destructive/10 hover:text-destructive"
+            onClick={() => {
+              if (window.confirm(`Supprimer définitivement ${candidateName} ? Cette action ne pourra pas être annulée.`)) {
+                handleDelete();
+              }
+            }}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Supprimer
+          </Button>
           <Button variant="outline" onClick={handleCancel}>Annuler</Button>
           <Button
             variant={type === "definitive_refusal" ? "destructive" : "default"}
@@ -370,6 +394,7 @@ export function PipelineClient({
   const [pendingCompanyInterview, setPendingCompanyInterview] = useState<{ candidateId: string; candidateName: string; matchings: { matchingId: string; needId: string; needTitle: string }[] } | null>(null);
   const [pendingWaitingFre, setPendingWaitingFre] = useState<{ candidateId: string; candidateName: string; matchings: { matchingId: string; needId: string; needTitle: string }[] } | null>(null);
   const [pendingArchiveDrop, setPendingArchiveDrop] = useState<{ id: string; name: string } | null>(null);
+  const [pendingYpareo, setPendingYpareo] = useState<{ id: string } | null>(null);
   const [, startTransition] = useTransition();
 
   const [candidates, setOptimistic] = useOptimistic(
@@ -397,6 +422,10 @@ export function PipelineClient({
     }
     if (status === "temporary_refusal" || status === "definitive_refusal") {
       setRefusPending({ id, status });
+      return;
+    }
+    if (status === "placed") {
+      setPendingYpareo({ id });
       return;
     }
     if (status === "interview") {
@@ -502,6 +531,24 @@ export function PipelineClient({
     });
   }
 
+  function handleArchiveDropDelete() {
+    if (!pendingArchiveDrop) return;
+    const { id } = pendingArchiveDrop;
+    setPendingArchiveDrop(null);
+    startTransition(async () => {
+      setOptimistic({ id, status: "definitive_refusal" });
+      await updateCandidateStatus(id, "definitive_refusal", "Suppression définitive");
+      const result = await permanentlyDeleteCandidate(id);
+      if (!result.success) {
+        toast.error(result.error ?? "Suppression définitive impossible");
+        router.refresh();
+        return;
+      }
+      toast.success("Candidat supprimé définitivement");
+      router.refresh();
+    });
+  }
+
   function handleWaitingFreConfirm(selection: { matchingId: string; needId: string }) {
     if (!pendingWaitingFre) return;
     const { candidateId } = pendingWaitingFre;
@@ -546,6 +593,22 @@ export function PipelineClient({
     startTransition(async () => {
       setOptimistic({ id, status });
       await updateCandidateStatus(id, status, reason);
+    });
+  }
+
+  function handleYpareoConfirm(draft: YpareoPlacementDraft, selectedClassId: string | null) {
+    if (!pendingYpareo) return;
+    const { id } = pendingYpareo;
+    setPendingYpareo(null);
+    pushYpareoPlacement(draft, selectedClassId).then((result) => {
+      if (!result.success) toast.error(result.error ?? "Erreur lors de l'envoi sur Ypareo");
+    }).catch(() => {
+      toast.error("Erreur lors de l'envoi sur Ypareo");
+    });
+    startTransition(async () => {
+      setOptimistic({ id, status: "placed" });
+      if (draft.matchingId) await markMatchingWinner(draft.matchingId);
+      await updateCandidateStatus(id, "placed");
     });
   }
 
@@ -689,7 +752,17 @@ export function PipelineClient({
         open={!!pendingArchiveDrop}
         candidateName={pendingArchiveDrop?.name ?? ""}
         onConfirm={handleArchiveDropConfirm}
+        onDelete={handleArchiveDropDelete}
         onCancel={() => setPendingArchiveDrop(null)}
+      />
+
+      <YpareoPlacementModal
+        open={!!pendingYpareo}
+        source="candidate"
+        sourceId={pendingYpareo?.id ?? null}
+        targetLabel="Placé"
+        onCancel={() => setPendingYpareo(null)}
+        onConfirm={handleYpareoConfirm}
       />
     </div>
   );

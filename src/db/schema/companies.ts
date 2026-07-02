@@ -25,8 +25,19 @@ export const companies = pgTable(
     address: text("address"),
     postalCode: text("postal_code"),
     city: text("city"),
+    phone: text("phone"),
+    email: text("email"),
     sector: text("sector"),
     website: text("website"),
+
+    // Données contractuelles FRE/CERFA
+    idcc: text("idcc"),
+    collectiveAgreement: text("collective_agreement"),
+    opco: text("opco"),
+    retirementFund: text("retirement_fund"),
+    providentFund: text("provident_fund"),
+    legalRepFirstName: text("legal_rep_first_name"),
+    legalRepLastName: text("legal_rep_last_name"),
 
     // Données registre public (INSEE/Pappers)
     publicRegistryData: jsonb("public_registry_data"),

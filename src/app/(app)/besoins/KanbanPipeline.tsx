@@ -571,7 +571,7 @@ function LostDropZone() {
     <div className="flex flex-col w-48 shrink-0">
       <div className="flex items-center gap-1.5 px-2.5 py-2 rounded-t-lg border-t-[3px] border-t-gray-300 bg-muted/30">
         <Archive className="h-3 w-3 text-muted-foreground" />
-        <span className="text-xs font-semibold text-muted-foreground">Perdus</span>
+        <span className="text-xs font-semibold text-muted-foreground">Archiver</span>
       </div>
       <div
         ref={setNodeRef}
@@ -584,7 +584,7 @@ function LostDropZone() {
       >
         <Archive className={cn("h-5 w-5 transition-colors", isOver ? "text-destructive/60" : "text-muted-foreground/30")} />
         <p className={cn("text-[10px] text-center leading-tight transition-colors", isOver ? "text-destructive/70 font-medium" : "text-muted-foreground/40")}>
-          Déposer pour<br />marquer perdu
+          Déposer pour<br />archiver
         </p>
       </div>
     </div>
@@ -620,6 +620,8 @@ export function KanbanPipeline({
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <div className="px-6 py-4 overflow-x-auto">
         <div className="flex gap-3 min-w-max pb-4">
+          <LostDropZone />
+          <div className="w-px bg-border self-stretch mx-1" />
           {ACTIVE_STATUSES.map(({ key, label }) => (
             <DroppableColumn
               key={key}
@@ -630,8 +632,6 @@ export function KanbanPipeline({
               activeId={activeId}
             />
           ))}
-          <div className="w-px bg-border self-stretch mx-1" />
-          <LostDropZone />
         </div>
       </div>
       <DragOverlay>

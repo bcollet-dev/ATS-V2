@@ -21,11 +21,12 @@ export type TaskFull = {
   completedAt: string | null;
   assigneeName: string | null;
   assignedTo: string | null;
-  candidateId: string | null;
-  candidateFirstName: string | null;
-  candidateLastName: string | null;
-  companyId: string | null;
-  companyName: string | null;
+  attachments: {
+    entityType: "candidate" | "company";
+    entityId: string;
+    label: string;
+    href: string;
+  }[];
 };
 
 type Profile = { id: string; fullName: string; email: string };
@@ -59,17 +60,10 @@ export function TaskSlideOver({
   open: boolean;
   onClose: () => void;
 }) {
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(true);
   const [isPending, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
   const Icon = CATEGORY_ICONS[task.category] ?? MoreHorizontal;
-
-  const entityName = task.candidateFirstName
-    ? `${task.candidateFirstName} ${task.candidateLastName}`
-    : task.companyName ?? null;
-  const entityHref = task.candidateId
-    ? `/candidats/${task.candidateId}`
-    : task.companyId ? `/entreprises/${task.companyId}` : null;
 
   function handleToggle() {
     startTransition(async () => {
@@ -87,16 +81,13 @@ export function TaskSlideOver({
   function handleSave(e: React.FormEvent) {
     e.preventDefault();
     const fd = new FormData(formRef.current!);
-    fd.set("candidateId", task.candidateId ?? "");
-    fd.set("companyId", task.companyId ?? "");
     startTransition(async () => {
       await updateGlobalTask(task.id, fd);
-      setEditing(false);
     });
   }
 
   return (
-    <Dialog.Root open={open} onOpenChange={(o) => { if (!o) { setEditing(false); onClose(); } }}>
+    <Dialog.Root open={open} onOpenChange={(o) => { if (!o) { setEditing(true); onClose(); } }}>
       <Dialog.Portal>
         <Dialog.Backdrop className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0 duration-200" />
         <Dialog.Popup className={cn(
@@ -177,9 +168,33 @@ export function TaskSlideOver({
                   </select>
                 </div>
 
+                {task.attachments.length > 0 && (
+                  <div className="space-y-1.5">
+                    <Label>Rattachements</Label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {task.attachments.map((attachment) => (
+                        <a
+                          key={`${attachment.entityType}:${attachment.entityId}`}
+                          href={attachment.href}
+                          className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs text-primary hover:bg-accent"
+                        >
+                          {attachment.entityType === "candidate" ? "Candidat" : "Entreprise"} - {attachment.label}
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {task.completedAt && (
+                  <div className="rounded-md border bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+                    Terminée le {formatDate(task.completedAt)}
+                  </div>
+                )}
+
                 <div className="flex gap-2 pt-2">
                   <Button type="button" variant="outline" onClick={() => setEditing(false)} disabled={isPending} className="flex-1">
-                    Annuler
+                    Voir les infos
                   </Button>
                   <Button type="submit" disabled={isPending} className="flex-1">
                     {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Enregistrer"}
@@ -227,19 +242,22 @@ export function TaskSlideOver({
                     </div>
                   )}
 
-                  {entityName && entityHref && (
+                  {task.attachments.length > 0 && (
                     <div>
                       <dt className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-0.5">
-                        {task.candidateId ? "Candidat" : "Entreprise"}
+                        Rattachements
                       </dt>
-                      <dd>
-                        <a
-                          href={entityHref}
-                          className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
-                        >
-                          {entityName}
-                          <ExternalLink className="h-3 w-3" />
-                        </a>
+                      <dd className="flex flex-wrap gap-1.5">
+                        {task.attachments.map((attachment) => (
+                          <a
+                            key={`${attachment.entityType}:${attachment.entityId}`}
+                            href={attachment.href}
+                            className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs text-primary hover:bg-accent"
+                          >
+                            {attachment.entityType === "candidate" ? "Candidat" : "Entreprise"} - {attachment.label}
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        ))}
                       </dd>
                     </div>
                   )}
@@ -249,26 +267,24 @@ export function TaskSlideOver({
           </div>
 
           {/* Footer */}
-          {!editing && (
-            <div className="border-t px-6 py-4 shrink-0 flex items-center justify-between">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-destructive hover:text-destructive"
-                onClick={handleDelete}
-                disabled={isPending}
-              >
-                <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-                Supprimer
-              </Button>
-              <Button size="sm" variant="outline" onClick={handleToggle} disabled={isPending}>
-                {isPending
-                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  : task.completedAt ? "Rouvrir" : "Marquer terminé"
-                }
-              </Button>
-            </div>
-          )}
+          <div className="border-t px-6 py-4 shrink-0 flex items-center justify-between">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-destructive hover:text-destructive"
+              onClick={handleDelete}
+              disabled={isPending}
+            >
+              <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+              Supprimer
+            </Button>
+            <Button size="sm" variant="outline" onClick={handleToggle} disabled={isPending}>
+              {isPending
+                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                : task.completedAt ? "Rouvrir" : "Marquer terminé"
+              }
+            </Button>
+          </div>
         </Dialog.Popup>
       </Dialog.Portal>
     </Dialog.Root>

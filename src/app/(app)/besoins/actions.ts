@@ -2,10 +2,12 @@
 
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/db";
-import { needs, companies, cursus, profiles, tasks, matchings, candidates } from "@/db/schema";
+import { needs, companies, cursus, profiles, tasks, taskLinks, matchings, candidates, needCursus, notifications } from "@/db/schema";
 import { eq, isNull, and, asc, inArray, notInArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { logActivityEvent } from "@/lib/activity";
+import { parseTaskCategory } from "@/lib/task-service";
 
 const createNeedSchema = z.object({
   companyId: z.string().uuid("Entreprise requise"),
@@ -30,7 +32,7 @@ type CreateNeedResult =
   | { success: false; error: string };
 
 export async function createNeed(input: CreateNeedInput): Promise<CreateNeedResult> {
-  await requireAuth();
+  const actor = await requireAuth();
   const parsed = createNeedSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: parsed.error.errors[0].message };
 
@@ -51,14 +53,37 @@ export async function createNeed(input: CreateNeedInput): Promise<CreateNeedResu
   // Create premier-contact task (non-fatal if fails)
   try {
     const dueAt = task.dueAt ? new Date(task.dueAt) : new Date();
-    await db.insert(tasks).values({
-      needId: created.id,
+    const [createdTask] = await db.insert(tasks).values({
       title: task.title,
-      category: task.category as never,
+      category: parseTaskCategory(task.category),
       assignedTo: task.assignedTo || null,
       dueAt,
       description: task.notes || null,
+      createdBy: actor.id,
+    }).returning({ id: tasks.id });
+
+    await db.insert(taskLinks).values({
+      taskId: createdTask.id,
+      entityType: "company",
+      entityId: companyId,
     });
+
+    await logActivityEvent({
+      companyId,
+      actorId: actor.id,
+      actionType: "task.created",
+      summary: `Tache creee : ${task.title}`,
+    });
+
+    if (task.assignedTo && task.assignedTo !== actor.id) {
+      await db.insert(notifications).values({
+        userId: task.assignedTo,
+        type: "task_assigned",
+        title: "Nouvelle tache assignee",
+        body: `${actor.fullName} vous a assigne : ${task.title}`,
+        companyId,
+      });
+    }
   } catch { /* task creation failure is non-fatal */ }
 
   revalidatePath("/besoins");
@@ -109,20 +134,23 @@ export async function loadPipelineNeeds(): Promise<NeedRow[]> {
     .leftJoin(companies, eq(needs.companyId, companies.id))
     .leftJoin(cursus, eq(needs.targetCursusId, cursus.id))
     .leftJoin(profiles, eq(needs.ownerId, profiles.id))
-    .where(isNull(needs.deletedAt))
+    .where(and(isNull(needs.deletedAt), isNull(companies.deletedAt)))
     .orderBy(asc(needs.title));
 
   if (rows.length === 0) return [];
 
   const needIds = rows.map((r) => r.id);
+  const companyIds = rows.map((r) => r.companyId);
 
   const [nextTaskRows, activeCountRows, waitingFreCountRows, interviewCountRows, candidateRows] = await Promise.all([
     db
-      .select({ needId: tasks.needId, dueAt: tasks.dueAt })
-      .from(tasks)
+      .select({ companyId: taskLinks.entityId, dueAt: tasks.dueAt })
+      .from(taskLinks)
+      .innerJoin(tasks, eq(taskLinks.taskId, tasks.id))
       .where(
         and(
-          inArray(tasks.needId, needIds),
+          eq(taskLinks.entityType, "company"),
+          inArray(taskLinks.entityId, companyIds),
           isNull(tasks.completedAt),
           isNull(tasks.deletedAt),
         )
@@ -131,30 +159,36 @@ export async function loadPipelineNeeds(): Promise<NeedRow[]> {
     db
       .select({ needId: matchings.needId, count: sql<number>`count(*)::int` })
       .from(matchings)
+      .innerJoin(candidates, eq(matchings.candidateId, candidates.id))
       .where(
         and(
           inArray(matchings.needId, needIds),
           notInArray(matchings.propositionStatus, ["not_retained"]),
+          isNull(candidates.deletedAt),
         )
       )
       .groupBy(matchings.needId),
     db
       .select({ needId: matchings.needId, count: sql<number>`count(*)::int` })
       .from(matchings)
+      .innerJoin(candidates, eq(matchings.candidateId, candidates.id))
       .where(
         and(
           inArray(matchings.needId, needIds),
           eq(matchings.propositionStatus, "waiting_fre"),
+          isNull(candidates.deletedAt),
         )
       )
       .groupBy(matchings.needId),
     db
       .select({ needId: matchings.needId, count: sql<number>`count(*)::int` })
       .from(matchings)
+      .innerJoin(candidates, eq(matchings.candidateId, candidates.id))
       .where(
         and(
           inArray(matchings.needId, needIds),
           eq(matchings.propositionStatus, "interview"),
+          isNull(candidates.deletedAt),
         )
       )
       .groupBy(matchings.needId),
@@ -173,6 +207,7 @@ export async function loadPipelineNeeds(): Promise<NeedRow[]> {
         and(
           inArray(matchings.needId, needIds),
           notInArray(matchings.propositionStatus, ["not_retained"]),
+          isNull(candidates.deletedAt),
         )
       )
       .orderBy(asc(matchings.createdAt)),
@@ -180,8 +215,8 @@ export async function loadPipelineNeeds(): Promise<NeedRow[]> {
 
   const nextTaskMap = new Map<string, string>();
   for (const t of nextTaskRows) {
-    if (t.needId && !nextTaskMap.has(t.needId)) {
-      nextTaskMap.set(t.needId, t.dueAt.toISOString());
+    if (t.companyId && !nextTaskMap.has(t.companyId)) {
+      nextTaskMap.set(t.companyId, t.dueAt.toISOString());
     }
   }
 
@@ -199,7 +234,7 @@ export async function loadPipelineNeeds(): Promise<NeedRow[]> {
   const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
 
   return rows.map((r) => {
-    const nextTaskAt = nextTaskMap.get(r.id) ?? null;
+    const nextTaskAt = nextTaskMap.get(r.companyId) ?? null;
     const updatedAt = r.updatedAt.toISOString();
     const inactive =
       r.updatedAt < twoDaysAgo &&
@@ -256,6 +291,32 @@ export async function updateNeedStatus(id: string, status: string, lostReason?: 
   revalidatePath("/besoins");
 }
 
+export async function permanentlyDeleteNeed(id: string): Promise<{ success: boolean; error?: string }> {
+  await requireAuth();
+
+  const [need] = await db
+    .select({ status: needs.status })
+    .from(needs)
+    .where(eq(needs.id, id))
+    .limit(1);
+
+  if (!need) return { success: false, error: "Besoin introuvable" };
+  if (need.status !== "lost") {
+    return { success: false, error: "Le besoin doit d'abord etre archive" };
+  }
+
+  await db
+    .delete(needs)
+    .where(eq(needs.id, id));
+
+  revalidatePath("/besoins");
+  revalidatePath("/candidats");
+  revalidatePath("/matching");
+  revalidatePath("/annuaire");
+  revalidatePath("/taches");
+  return { success: true };
+}
+
 export async function updateNeedTitle(id: string, title: string) {
   await requireAuth();
   if (!title.trim()) return;
@@ -291,4 +352,100 @@ export async function updateNeedCity(id: string, city: string | null) {
     .set({ city: city?.trim() || null, updatedAt: new Date() })
     .where(eq(needs.id, id));
   revalidatePath("/besoins");
+}
+
+const contractFieldsSchema = z.object({
+  weeklyHours: z.string().optional(),
+  contractType: z.string().optional(),
+  salaryReference: z.string().optional(),
+  smcAmount: z.string().optional(),
+  overtimeHandling: z.string().optional(),
+  endDate: z.string().optional(),
+  masterFirstName: z.string().optional(),
+  masterLastName: z.string().optional(),
+  masterBirthName: z.string().optional(),
+  masterBirthDate: z.string().optional(),
+  masterJobTitle: z.string().optional(),
+  masterPhone: z.string().optional(),
+  masterEmail: z.string().optional(),
+  benefitFood: z.string().optional(),
+  benefitHousing: z.string().optional(),
+  benefitOther: z.string().optional(),
+});
+
+export type ContractFields = z.infer<typeof contractFieldsSchema>;
+
+export async function updateNeedContractFields(
+  needId: string,
+  fields: ContractFields
+): Promise<{ success: boolean; error?: string }> {
+  const actor = await requireAuth();
+  const parsed = contractFieldsSchema.safeParse(fields);
+  if (!parsed.success) return { success: false, error: parsed.error.errors[0].message };
+
+  const d = parsed.data;
+
+  await db
+    .update(needs)
+    .set({
+      weeklyHours: d.weeklyHours ?? null,
+      contractType: d.contractType ?? null,
+      salaryReference: d.salaryReference ?? null,
+      smcAmount: d.smcAmount ?? null,
+      overtimeHandling: d.overtimeHandling ?? null,
+      endDate: d.endDate ?? null,
+      masterFirstName: d.masterFirstName ?? null,
+      masterLastName: d.masterLastName ?? null,
+      masterBirthName: d.masterBirthName ?? null,
+      masterBirthDate: d.masterBirthDate ?? null,
+      masterJobTitle: d.masterJobTitle ?? null,
+      masterPhone: d.masterPhone ?? null,
+      masterEmail: d.masterEmail ?? null,
+      benefitFood: d.benefitFood ?? null,
+      benefitHousing: d.benefitHousing ?? null,
+      benefitOther: d.benefitOther ?? null,
+      updatedAt: new Date(),
+    })
+    .where(eq(needs.id, needId));
+
+  await logActivityEvent({
+    needId,
+    actorId: actor.id,
+    actionType: "need_fields_updated",
+    summary: "Informations du contrat mises à jour",
+  });
+
+  revalidatePath(`/besoins/${needId}`);
+  return { success: true };
+}
+
+export async function syncNeedCursus(needId: string, cursusIds: string[]): Promise<void> {
+  const actor = await requireAuth();
+
+  await db.delete(needCursus).where(eq(needCursus.needId, needId));
+
+  if (cursusIds.length > 0) {
+    await db.insert(needCursus).values(cursusIds.map((cursusId) => ({ needId, cursusId })));
+  }
+
+  await logActivityEvent({
+    needId,
+    actorId: actor.id,
+    actionType: "need_cursus_updated",
+    summary: "Cursus cibles mis à jour",
+  });
+
+  revalidatePath(`/besoins/${needId}`);
+}
+
+export async function loadNeedCursus(needId: string): Promise<{ cursusId: string; cursusName: string }[]> {
+  await requireAuth();
+
+  const rows = await db
+    .select({ cursusId: needCursus.cursusId, cursusName: cursus.name })
+    .from(needCursus)
+    .innerJoin(cursus, eq(needCursus.cursusId, cursus.id))
+    .where(eq(needCursus.needId, needId));
+
+  return rows;
 }

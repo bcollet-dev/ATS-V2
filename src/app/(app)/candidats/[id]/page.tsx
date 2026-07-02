@@ -2,17 +2,18 @@ import { requireAuth } from "@/lib/auth";
 import { db } from "@/db";
 import {
   candidates, candidateExperiences, candidateFormations,
-  candidateSkills, tasks, profiles,
+  candidateSkills, profiles,
 } from "@/db/schema";
 import { eq, isNull, and, desc, asc } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
+import { DeleteEntityButton } from "@/components/entities/DeleteEntityButton";
 import { getActiveCursus } from "@/app/(app)/cursus/actions";
 import { BlocIdentite } from "./BlocIdentite";
 import { BlocContact } from "./BlocContact";
-import { BlocGmail } from "./BlocGmail";
+import { BlocGmail } from "@/app/(app)/mail/BlocGmail";
 import { BlocRecrutement } from "./BlocRecrutement";
 import { BlocCompetences } from "./BlocCompetences";
 import { BlocExperiences } from "./BlocExperiences";
@@ -25,7 +26,9 @@ import {
   loadMatchingsForCandidate,
   loadAvailableNeedsForCandidate,
 } from "@/app/(app)/matching/actions";
-import { getCandidateCV } from "./actions";
+import { listCandidateDocuments } from "./document-actions";
+import { loadCandidateTasks } from "./task-actions";
+import { TaskContextScope } from "@/components/tasks/FloatingTaskCreator";
 
 const STATUS_LABELS: Record<string, string> = {
   to_call: "À appeler",
@@ -62,7 +65,7 @@ export default async function CandidatPage({
     getActiveCursus(),
   ]);
 
-  const [candidat, experiences, formations, skills, candidateTasks, activeProfiles, candidateMatchings, availableNeeds, candidateCV] = await Promise.all([
+  const [candidat, experiences, formations, skills, candidateTasks, activeProfiles, candidateMatchings, availableNeeds, candidateDocs] = await Promise.all([
     db.query.candidates.findFirst({
       where: and(eq(candidates.id, id), isNull(candidates.deletedAt)),
     }),
@@ -99,22 +102,7 @@ export default async function CandidatPage({
       .from(candidateSkills)
       .where(eq(candidateSkills.candidateId, id))
       .orderBy(asc(candidateSkills.createdAt)),
-    db
-      .select({
-        id: tasks.id,
-        title: tasks.title,
-        category: tasks.category,
-        note: tasks.description,
-        dueAt: tasks.dueAt,
-        completedAt: tasks.completedAt,
-        assignedTo: tasks.assignedTo,
-        assigneeName: profiles.fullName,
-        createdBy: tasks.createdBy,
-      })
-      .from(tasks)
-      .leftJoin(profiles, eq(tasks.assignedTo, profiles.id))
-      .where(and(eq(tasks.candidateId, id), isNull(tasks.deletedAt)))
-      .orderBy(asc(tasks.dueAt)),
+    loadCandidateTasks(id),
     db
       .select({ id: profiles.id, fullName: profiles.fullName, email: profiles.email })
       .from(profiles)
@@ -122,7 +110,7 @@ export default async function CandidatPage({
       .orderBy(asc(profiles.fullName)),
     loadMatchingsForCandidate(id),
     loadAvailableNeedsForCandidate(id),
-    getCandidateCV(id),
+    listCandidateDocuments(id),
   ]);
 
   if (!candidat) notFound();
@@ -130,15 +118,19 @@ export default async function CandidatPage({
   const canRevealNir = user.role === "admin" || user.role === "admissions";
   const badgeClass = STATUS_BADGE[candidat.status] ?? "bg-muted text-muted-foreground";
 
-  const serializedTasks = candidateTasks.map((t) => ({
-    ...t,
-    category: t.category as string,
-    dueAt: t.dueAt.toISOString(),
-    completedAt: t.completedAt?.toISOString() ?? null,
-  }));
+  const serializedTasks = candidateTasks;
 
   return (
     <div className="p-6 max-w-5xl">
+      <TaskContextScope
+        attachment={{
+          entityType: "candidate",
+          entityId: candidat.id,
+          label: `${candidat.firstName} ${candidat.lastName}`,
+          sub: "Candidat",
+        }}
+      />
+
       <Link
         href="/candidats"
         className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-6 w-fit"
@@ -156,9 +148,22 @@ export default async function CandidatPage({
             <p className="text-sm text-muted-foreground mt-1">{candidat.cursusEnvisage}</p>
           )}
         </div>
-        <Badge className={`text-xs font-medium px-2 py-1 rounded-md border-0 ${badgeClass}`}>
-          {STATUS_LABELS[candidat.status] ?? candidat.status}
-        </Badge>
+        <div className="flex items-center gap-2">
+          <Badge className={`text-xs font-medium px-2 py-1 rounded-md border-0 ${badgeClass}`}>
+            {STATUS_LABELS[candidat.status] ?? candidat.status}
+          </Badge>
+          {candidat.ypareoPersonId && (
+            <Badge className="text-xs font-medium px-2 py-1 rounded-md border-0 bg-violet-100 text-violet-700">
+              Sur Ypareo
+            </Badge>
+          )}
+          <DeleteEntityButton
+            entityType="candidate"
+            entityId={candidat.id}
+            label={`${candidat.firstName} ${candidat.lastName}`}
+            redirectTo="/candidats"
+          />
+        </div>
       </div>
 
       <div className="space-y-4">
@@ -198,7 +203,11 @@ export default async function CandidatPage({
               }}
             />
           </div>
-          <BlocGmail />
+          <BlocGmail
+            kind="candidate"
+            entityId={candidat.id}
+            nextPath={`/candidats/${candidat.id}`}
+          />
         </div>
 
         {/* Recrutement */}
@@ -218,7 +227,7 @@ export default async function CandidatPage({
         />
 
         {/* Documents */}
-        <BlocDocuments candidateId={candidat.id} initialCV={candidateCV} />
+        <BlocDocuments candidateId={candidat.id} initialDocuments={candidateDocs} />
 
         {/* Parcours */}
         <section className="rounded-lg border bg-card overflow-hidden">

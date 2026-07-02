@@ -1,17 +1,26 @@
 "use server";
 
 import { db } from "@/db";
-import { tasks, notifications, activityEvents, profiles, candidates, companies, companyContacts } from "@/db/schema";
+import { tasks, taskLinks, notifications, activityEvents, candidates, companies, companyContacts } from "@/db/schema";
 import { eq, and, isNull, ilike, or } from "drizzle-orm";
 import { requireAuth } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import {
+  parseTaskCategory,
+  taskLinkFromFormData,
+  taskPathsForLinks,
+  type TaskLinkInput,
+} from "@/lib/task-service";
 
 export type EntityResult = {
   type: "candidate" | "company" | "contact";
+  entityType: "candidate" | "company";
+  entityId: string;
   candidateId: string | null;
   companyId: string | null;
   label: string;
+  attachmentLabel: string;
   sub: string;
 };
 
@@ -53,39 +62,93 @@ export async function searchEntities(query: string): Promise<EntityResult[]> {
   ]);
 
   return [
-    ...cands.map((c) => ({
-      type: "candidate" as const,
-      candidateId: c.id,
-      companyId: null,
-      label: `${c.firstName} ${c.lastName}`,
-      sub: "Candidat",
-    })),
+    ...cands.map((c) => {
+      const label = `${c.firstName} ${c.lastName}`;
+      return {
+        type: "candidate" as const,
+        entityType: "candidate" as const,
+        entityId: c.id,
+        candidateId: c.id,
+        companyId: null,
+        label,
+        attachmentLabel: label,
+        sub: "Candidat",
+      };
+    }),
     ...comps.map((c) => ({
       type: "company" as const,
+      entityType: "company" as const,
+      entityId: c.id,
       candidateId: null,
       companyId: c.id,
       label: c.name,
+      attachmentLabel: c.name,
       sub: "Entreprise",
     })),
-    ...contacts.map((c) => ({
-      type: "contact" as const,
-      candidateId: null,
-      companyId: c.companyId,
-      label: `${c.firstName} ${c.lastName}`,
-      sub: c.companyName ?? "Contact",
-    })),
+    ...contacts.map((c) => {
+      const contactLabel = `${c.firstName} ${c.lastName}`;
+      return {
+        type: "contact" as const,
+        entityType: "company" as const,
+        entityId: c.companyId,
+        candidateId: null,
+        companyId: c.companyId,
+        label: contactLabel,
+        attachmentLabel: c.companyName ?? contactLabel,
+        sub: c.companyName ?? "Contact",
+      };
+    }),
   ];
 }
 
 const taskSchema = z.object({
   title: z.string().trim().min(1),
-  category: z.enum(["call", "email", "document", "follow_up", "interview", "other"]),
+  category: z.string().trim().min(1),
   description: z.string().trim().optional(),
   dueAt: z.string().min(1),
   assignedTo: z.string().uuid().optional().or(z.literal("")),
-  candidateId: z.string().uuid().optional().or(z.literal("")),
-  companyId: z.string().uuid().optional().or(z.literal("")),
 });
+
+function firstLinkOfType(links: TaskLinkInput[], entityType: "candidate" | "company") {
+  return links.find((link) => link.entityType === entityType)?.entityId ?? null;
+}
+
+async function loadLinksForTask(taskId: string): Promise<TaskLinkInput[]> {
+  const rows = await db
+    .select({ entityType: taskLinks.entityType, entityId: taskLinks.entityId })
+    .from(taskLinks)
+    .where(eq(taskLinks.taskId, taskId));
+
+  return rows.map((row) => ({ entityType: row.entityType, entityId: row.entityId }));
+}
+
+async function logForLinks({
+  actorId,
+  links,
+  actionType,
+  summary,
+}: {
+  actorId: string;
+  links: TaskLinkInput[];
+  actionType: string;
+  summary: string;
+}) {
+  if (links.length === 0) return;
+  await db.insert(activityEvents).values(
+    links.map((link) => ({
+      actorId,
+      candidateId: link.entityType === "candidate" ? link.entityId : null,
+      companyId: link.entityType === "company" ? link.entityId : null,
+      actionType,
+      summary,
+    }))
+  );
+}
+
+function revalidateLinkedTaskSurfaces(links: TaskLinkInput[]) {
+  revalidatePath("/taches");
+  for (const path of taskPathsForLinks(links)) revalidatePath(path);
+}
 
 export async function createGlobalTask(formData: FormData) {
   const user = await requireAuth();
@@ -96,46 +159,60 @@ export async function createGlobalTask(formData: FormData) {
     description: formData.get("description") || undefined,
     dueAt: formData.get("dueAt"),
     assignedTo: formData.get("assignedTo") || "",
-    candidateId: formData.get("candidateId") || "",
-    companyId: formData.get("companyId") || "",
   });
 
   if (!parsed.success) return { error: "Champs invalides" };
 
-  const { title, category, description, dueAt, assignedTo, candidateId, companyId } = parsed.data;
+  const { title, description, dueAt, assignedTo } = parsed.data;
+  const category = parseTaskCategory(parsed.data.category);
+  const links = taskLinkFromFormData(formData);
 
-  if (!candidateId && !companyId) return { error: "Sélectionnez un rattachement" };
+  if (links.length === 0) return { error: "Selectionnez au moins un candidat ou une entreprise" };
 
-  const [task] = await db.insert(tasks).values({
-    title,
-    category,
-    description: description || null,
-    dueAt: new Date(dueAt),
-    assignedTo: assignedTo || null,
-    candidateId: candidateId || null,
-    companyId: companyId || null,
-    createdBy: user.id,
-  }).returning({ id: tasks.id });
+  const task = await db.transaction(async (tx) => {
+    const [createdTask] = await tx.insert(tasks).values({
+      title,
+      category,
+      description: description || null,
+      dueAt: new Date(dueAt),
+      assignedTo: assignedTo || null,
+      createdBy: user.id,
+    }).returning({ id: tasks.id });
+
+    await tx.insert(taskLinks).values(
+      links.map((link) => ({
+        taskId: createdTask.id,
+        entityType: link.entityType,
+        entityId: link.entityId,
+      }))
+    );
+
+    await tx.insert(activityEvents).values(
+      links.map((link) => ({
+        actorId: user.id,
+        candidateId: link.entityType === "candidate" ? link.entityId : null,
+        companyId: link.entityType === "company" ? link.entityId : null,
+        actionType: "task.created",
+        summary: `Tache creee : ${title}`,
+      }))
+    );
+
+    return createdTask;
+  });
 
   if (assignedTo && assignedTo !== user.id) {
     await db.insert(notifications).values({
       userId: assignedTo,
       type: "task_assigned",
-      title: "Nouvelle tâche assignée",
-      body: `${user.fullName} vous a assigné : ${title}`,
-      candidateId: candidateId || null,
+      title: "Nouvelle tache assignee",
+      body: `${user.fullName} vous a assigne : ${title}`,
+      candidateId: firstLinkOfType(links, "candidate"),
+      companyId: firstLinkOfType(links, "company"),
     });
   }
 
-  await db.insert(activityEvents).values({
-    actorId: user.id,
-    candidateId: candidateId || null,
-    companyId: companyId || null,
-    actionType: "task.created",
-    summary: `Tâche créée : ${title}`,
-  });
-
-  revalidatePath("/taches");
+  revalidateLinkedTaskSurfaces(links);
+  return { id: task.id };
 }
 
 export async function toggleGlobalTask(id: string) {
@@ -145,6 +222,7 @@ export async function toggleGlobalTask(id: string) {
   if (!task) return;
 
   const now = task.completedAt ? null : new Date();
+  const links = await loadLinksForTask(id);
 
   await db.update(tasks).set({
     completedAt: now,
@@ -152,11 +230,18 @@ export async function toggleGlobalTask(id: string) {
     updatedAt: new Date(),
   }).where(eq(tasks.id, id));
 
-  revalidatePath("/taches");
+  await logForLinks({
+    actorId: user.id,
+    links,
+    actionType: now ? "task.completed" : "task.reopened",
+    summary: now ? `Tache terminee : ${task.title}` : `Tache rouverte : ${task.title}`,
+  });
+
+  revalidateLinkedTaskSurfaces(links);
 }
 
 export async function updateGlobalTask(id: string, formData: FormData) {
-  await requireAuth();
+  const user = await requireAuth();
 
   const parsed = taskSchema.safeParse({
     title: formData.get("title"),
@@ -164,13 +249,13 @@ export async function updateGlobalTask(id: string, formData: FormData) {
     description: formData.get("description") || undefined,
     dueAt: formData.get("dueAt"),
     assignedTo: formData.get("assignedTo") || "",
-    candidateId: formData.get("candidateId") || "",
-    companyId: formData.get("companyId") || "",
   });
 
   if (!parsed.success) return { error: "Champs invalides" };
 
-  const { title, category, description, dueAt, assignedTo, candidateId, companyId } = parsed.data;
+  const { title, description, dueAt, assignedTo } = parsed.data;
+  const category = parseTaskCategory(parsed.data.category);
+  const links = await loadLinksForTask(id);
 
   await db.update(tasks).set({
     title,
@@ -178,16 +263,32 @@ export async function updateGlobalTask(id: string, formData: FormData) {
     description: description || null,
     dueAt: new Date(dueAt),
     assignedTo: assignedTo || null,
-    candidateId: candidateId || null,
-    companyId: companyId || null,
     updatedAt: new Date(),
   }).where(eq(tasks.id, id));
 
-  revalidatePath("/taches");
+  await logForLinks({
+    actorId: user.id,
+    links,
+    actionType: "task.updated",
+    summary: `Tache modifiee : ${title}`,
+  });
+
+  revalidateLinkedTaskSurfaces(links);
 }
 
 export async function deleteGlobalTask(id: string) {
-  await requireAuth();
-  await db.update(tasks).set({ deletedAt: new Date() }).where(eq(tasks.id, id));
-  revalidatePath("/taches");
+  const user = await requireAuth();
+  const task = await db.query.tasks.findFirst({ where: eq(tasks.id, id) });
+  const links = await loadLinksForTask(id);
+
+  await db.update(tasks).set({ deletedAt: new Date(), updatedAt: new Date() }).where(eq(tasks.id, id));
+
+  await logForLinks({
+    actorId: user.id,
+    links,
+    actionType: "task.deleted",
+    summary: `Tache supprimee : ${task?.title ?? "Sans titre"}`,
+  });
+
+  revalidateLinkedTaskSurfaces(links);
 }

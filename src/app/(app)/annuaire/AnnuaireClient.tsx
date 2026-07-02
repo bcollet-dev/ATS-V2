@@ -6,6 +6,7 @@ import { Search, Users, Building2, BookUser, Phone, Mail, GraduationCap, MapPin,
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DeleteEntityButton } from "@/components/entities/DeleteEntityButton";
 import { cn } from "@/lib/utils";
 import { searchAnnuaire, type FilterType, type SearchResult } from "./actions";
 import { CandidatDrawer } from "@/components/candidat-drawer";
@@ -25,8 +26,7 @@ const TYPE_STYLES = {
 
 const TYPE_ROUTES = {
   candidat: "/candidats",
-  contact: "/contacts",
-  entreprise: "/entreprises",
+  entreprise: "/annuaire",
 } as const;
 
 export function AnnuaireClient({ cursus }: { cursus: { id: string; name: string }[] }) {
@@ -67,7 +67,13 @@ export function AnnuaireClient({ cursus }: { cursus: { id: string; name: string 
   }
 
   function handleResultClick(result: SearchResult) {
-    router.push(`${TYPE_ROUTES[result.type]}/${result.id}`);
+    if (result.type === "contact") {
+      router.push(`/annuaire/${result.companyId}`);
+    } else if (result.type === "candidat") {
+      router.push(`/candidats/${result.id}`);
+    } else {
+      router.push(`/annuaire/${result.id}`);
+    }
   }
 
   return (
@@ -81,7 +87,7 @@ export function AnnuaireClient({ cursus }: { cursus: { id: string; name: string 
     <EntrepriseDrawer
       open={entrepriseDrawerOpen}
       onOpenChange={setEntrepriseDrawerOpen}
-      onCreated={(id) => router.push(`/entreprises/${id}`)}
+      onCreated={(id) => router.push(`/annuaire/${id}`)}
     />
     <div className="max-w-2xl mx-auto space-y-4">
       {/* En-tête avec boutons de création */}
@@ -156,6 +162,7 @@ export function AnnuaireClient({ cursus }: { cursus: { id: string; name: string 
             key={`${result.type}-${result.id}`}
             result={result}
             onClick={() => handleResultClick(result)}
+            onDeleted={() => setResults((prev) => prev.filter((r) => `${r.type}-${r.id}` !== `${result.type}-${result.id}`))}
           />
         ))}
       </div>
@@ -167,9 +174,11 @@ export function AnnuaireClient({ cursus }: { cursus: { id: string; name: string 
 function ResultCard({
   result,
   onClick,
+  onDeleted,
 }: {
   result: SearchResult;
   onClick: () => void;
+  onDeleted: () => void;
 }) {
   const { badge } = TYPE_STYLES[result.type];
   const typeLabel =
@@ -180,11 +189,12 @@ function ResultCard({
       : "Entreprise";
 
   return (
-    <button
-      onClick={onClick}
-      className="w-full text-left rounded-lg border bg-card px-4 py-3 hover:bg-accent/50 transition-colors flex items-start gap-3"
-    >
-      <div className="flex-1 min-w-0 space-y-1">
+    <div className="rounded-lg border bg-card hover:bg-accent/50 transition-colors flex items-start gap-2">
+      <button
+        onClick={onClick}
+        className="flex-1 min-w-0 text-left px-4 py-3"
+      >
+      <div className="space-y-1">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="font-medium text-sm">
             {result.type === "entreprise"
@@ -260,6 +270,19 @@ function ResultCard({
           )}
         </div>
       </div>
-    </button>
+      </button>
+      {result.type !== "contact" && (
+        <div className="shrink-0 pr-3 pt-3">
+          <DeleteEntityButton
+            entityType={result.type === "candidat" ? "candidate" : "company"}
+            entityId={result.id}
+            label={result.type === "entreprise" ? result.name : `${result.firstName} ${result.lastName}`}
+            iconOnly
+            stopPropagation
+            onDeleted={onDeleted}
+          />
+        </div>
+      )}
+    </div>
   );
 }

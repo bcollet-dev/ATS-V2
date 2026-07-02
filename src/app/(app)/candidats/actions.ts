@@ -2,7 +2,7 @@
 
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/db";
-import { candidates, profiles, tasks, matchings, needs, companies } from "@/db/schema";
+import { candidates, profiles, tasks, taskLinks, matchings, needs } from "@/db/schema";
 import { eq, isNull, and, asc, inArray, notInArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { syncNeedStatusFromMatchings } from "@/app/(app)/matching/actions";
@@ -47,11 +47,13 @@ export async function loadPipelineCandidates(): Promise<CandidatRow[]> {
 
   const [nextTaskRows, matchingRows] = await Promise.all([
     db
-      .select({ candidateId: tasks.candidateId, dueAt: tasks.dueAt })
-      .from(tasks)
+      .select({ candidateId: taskLinks.entityId, dueAt: tasks.dueAt })
+      .from(taskLinks)
+      .innerJoin(tasks, eq(taskLinks.taskId, tasks.id))
       .where(
         and(
-          inArray(tasks.candidateId, candidateIds),
+          eq(taskLinks.entityType, "candidate"),
+          inArray(taskLinks.entityId, candidateIds),
           isNull(tasks.completedAt),
           isNull(tasks.deletedAt),
         )

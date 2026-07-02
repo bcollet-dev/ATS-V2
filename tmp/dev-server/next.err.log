@@ -1,0 +1,48 @@
+ ⨯ Error: Failed query: select "need_id", count(*)::int from "matchings" where ("matchings"."need_id" in ($1, $2, $3) and "matchings"."proposition_status" not in ($4) and "candidates"."deleted_at" is null) group by "matchings"."need_id"
+params: 59a6f3dc-d9ec-4bd1-a9ee-4eedf330eb14,8189755f-beee-487f-b140-371ad3fb2055,618d4def-31a8-43d4-a3f3-93f4e5ae7449,not_retained
+    at async loadPipelineNeeds (src\app\(app)\besoins\actions.ts:145:99)
+    at async BesoinsPage (src\app\(app)\besoins\page.tsx:10:70)
+  143 |   const companyIds = rows.map((r) => r.companyId);
+  144 |
+> 145 |   const [nextTaskRows, activeCountRows, waitingFreCountRows, interviewCountRows, candidateRows] = await Promise.all([
+      |                                                                                                   ^
+  146 |     db
+  147 |       .select({ companyId: taskLinks.entityId, dueAt: tasks.dueAt })
+  148 |       .from(taskLinks) {
+  query: 'select "need_id", count(*)::int from "matchings" where ("matchings"."need_id" in ($1, $2, $3) and "matchings"."proposition_status" not in ($4) and "candidates"."deleted_at" is null) group by "matchings"."need_id"',
+  params: [Array],
+  digest: '2424213595',
+  [cause]: [Error [PostgresError]: missing FROM-clause entry for table "candidates"] {
+    severity_local: 'ERROR',
+    severity: 'ERROR',
+    code: '42P01',
+    position: '148',
+    file: 'parse_relation.c',
+    line: '3651',
+    routine: 'errorMissingRTE'
+  }
+}
+ ⨯ Error: Failed query: select "need_id", count(*)::int from "matchings" where ("matchings"."need_id" in ($1, $2, $3) and "matchings"."proposition_status" not in ($4) and "candidates"."deleted_at" is null) group by "matchings"."need_id"
+params: 59a6f3dc-d9ec-4bd1-a9ee-4eedf330eb14,8189755f-beee-487f-b140-371ad3fb2055,618d4def-31a8-43d4-a3f3-93f4e5ae7449,not_retained
+    at async loadPipelineNeeds (src\app\(app)\besoins\actions.ts:145:99)
+    at async BesoinsPage (src\app\(app)\besoins\page.tsx:10:70)
+  143 |   const companyIds = rows.map((r) => r.companyId);
+  144 |
+> 145 |   const [nextTaskRows, activeCountRows, waitingFreCountRows, interviewCountRows, candidateRows] = await Promise.all([
+      |                                                                                                   ^
+  146 |     db
+  147 |       .select({ companyId: taskLinks.entityId, dueAt: tasks.dueAt })
+  148 |       .from(taskLinks) {
+  query: 'select "need_id", count(*)::int from "matchings" where ("matchings"."need_id" in ($1, $2, $3) and "matchings"."proposition_status" not in ($4) and "candidates"."deleted_at" is null) group by "matchings"."need_id"',
+  params: [Array],
+  digest: '2424213595',
+  [cause]: [Error [PostgresError]: missing FROM-clause entry for table "candidates"] {
+    severity_local: 'ERROR',
+    severity: 'ERROR',
+    code: '42P01',
+    position: '148',
+    file: 'parse_relation.c',
+    line: '3651',
+    routine: 'errorMissingRTE'
+  }
+}

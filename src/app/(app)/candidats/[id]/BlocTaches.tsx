@@ -15,8 +15,35 @@ import { Modal, ModalContent, ModalHeader, ModalTitle, ModalClose, ModalBody, Mo
 import { cn } from "@/lib/utils";
 import {
   createTask, updateTask, toggleTask, deleteTask,
-  type TaskInput, type TaskRow, type TaskCategory,
 } from "./task-actions";
+
+type TaskCategory = "call" | "email" | "document" | "follow_up" | "interview" | "other";
+
+type TaskInput = {
+  title: string;
+  category: TaskCategory;
+  note: string;
+  dueAt: string;
+  assignedTo: string;
+};
+
+type TaskRow = {
+  id: string;
+  title: string;
+  category: string;
+  note: string | null;
+  dueAt: string;
+  completedAt: string | null;
+  assignedTo: string | null;
+  assigneeName: string | null;
+  createdBy: string | null;
+  attachments: {
+    entityType: "candidate" | "company";
+    entityId: string;
+    label: string;
+    href: string;
+  }[];
+};
 
 const CATEGORIES: { value: TaskCategory; label: string; Icon: React.FC<{ className?: string }> }[] = [
   { value: "call", label: "Appel", Icon: Phone },
@@ -192,6 +219,18 @@ export function BlocTaches({
                 </span>
               </div>
               {task.note && <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{task.note}</p>}
+              {task.attachments.length > 1 && (
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {task.attachments
+                    .filter((attachment) => !(attachment.entityType === "candidate" && attachment.entityId === candidateId))
+                    .slice(0, 3)
+                    .map((attachment) => (
+                      <span key={`${attachment.entityType}:${attachment.entityId}`} className="rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                        {attachment.entityType === "candidate" ? "Candidat" : "Entreprise"} - {attachment.label}
+                      </span>
+                    ))}
+                </div>
+              )}
             </div>
             {!done && (
               <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">

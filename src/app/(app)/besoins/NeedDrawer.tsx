@@ -50,6 +50,7 @@ export function NeedDrawer({
   companies,
   cursus,
   profiles,
+  defaultCompanyId,
   onCreated,
 }: {
   open: boolean;
@@ -57,6 +58,7 @@ export function NeedDrawer({
   companies: { id: string; name: string }[];
   cursus: { id: string; name: string }[];
   profiles: { id: string; fullName: string }[];
+  defaultCompanyId?: string;
   onCreated?: (id: string) => void;
 }) {
   const [isPending, startTransition] = useTransition();
@@ -74,7 +76,7 @@ export function NeedDrawer({
   } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
-      companyId: "",
+      companyId: defaultCompanyId ?? "",
       title: "",
       targetCursusId: "",
       city: "",
@@ -143,19 +145,25 @@ export function NeedDrawer({
               <Controller
                 name="companyId"
                 control={control}
-                render={({ field }) => (
-                  <select
-                    {...field}
-                    id="companyId"
-                    autoFocus
-                    className={cn(selectClass, !field.value && "text-muted-foreground")}
-                  >
-                    <option value="">— Choisir une entreprise —</option>
-                    {companies.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
-                )}
+                render={({ field }) =>
+                  defaultCompanyId ? (
+                    <div className="flex h-9 items-center px-3 rounded-md border border-input bg-muted/40 text-sm">
+                      {companies.find((c) => c.id === defaultCompanyId)?.name ?? defaultCompanyId}
+                    </div>
+                  ) : (
+                    <select
+                      {...field}
+                      id="companyId"
+                      autoFocus
+                      className={cn(selectClass, !field.value && "text-muted-foreground")}
+                    >
+                      <option value="">— Choisir une entreprise —</option>
+                      {companies.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  )
+                }
               />
               {errors.companyId && <p className="text-xs text-destructive">{errors.companyId.message}</p>}
             </div>

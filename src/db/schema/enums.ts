@@ -65,6 +65,11 @@ export const taskCategory = pgEnum("task_category", [
   "administrative",
 ]);
 
+export const taskLinkEntityType = pgEnum("task_link_entity_type", [
+  "candidate",
+  "company",
+]);
+
 export const ypareoExchangeStatus = pgEnum("ypareo_exchange_status", [
   "success",
   "error",

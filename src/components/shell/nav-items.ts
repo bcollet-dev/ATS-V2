@@ -7,7 +7,6 @@ import {
   History,
   ListTodo,
   Mail,
-  Settings,
   AlertCircle,
   RefreshCw,
 } from "lucide-react";
@@ -60,11 +59,6 @@ export const adminNavItems = [
     label: "Historique",
     href: "/historique",
     icon: History,
-  },
-  {
-    label: "Utilisateurs",
-    href: "/utilisateurs",
-    icon: Settings,
   },
   {
     label: "Erreurs",

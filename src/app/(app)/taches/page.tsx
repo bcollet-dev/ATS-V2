@@ -1,9 +1,10 @@
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/db";
-import { tasks, profiles, candidates, companies } from "@/db/schema";
+import { tasks, profiles } from "@/db/schema";
 import { eq, isNull, and, asc } from "drizzle-orm";
 import { MarkNotificationsRead } from "./MarkNotificationsRead";
 import { KanbanBoard } from "./KanbanBoard";
+import { loadTaskAttachments } from "@/lib/task-service";
 
 export default async function TachesPage() {
   const user = await requireAuth();
@@ -24,16 +25,9 @@ export default async function TachesPage() {
         completedAt: tasks.completedAt,
         assigneeName: profiles.fullName,
         assignedTo: tasks.assignedTo,
-        candidateId: tasks.candidateId,
-        candidateFirstName: candidates.firstName,
-        candidateLastName: candidates.lastName,
-        companyId: tasks.companyId,
-        companyName: companies.name,
       })
       .from(tasks)
       .leftJoin(profiles, eq(tasks.assignedTo, profiles.id))
-      .leftJoin(candidates, eq(tasks.candidateId, candidates.id))
-      .leftJoin(companies, eq(tasks.companyId, companies.id))
       .where(whereClause)
       .orderBy(asc(tasks.dueAt)),
     db
@@ -43,15 +37,15 @@ export default async function TachesPage() {
       .orderBy(asc(profiles.fullName)),
   ]);
 
+  const attachmentsByTask = await loadTaskAttachments(rows.map((r) => r.id));
+
   const serialized = rows.map((r) => ({
     ...r,
     dueAt: r.dueAt.toISOString(),
     completedAt: r.completedAt?.toISOString() ?? null,
     assigneeName: r.assigneeName ?? null,
     assignedTo: r.assignedTo ?? null,
-    candidateFirstName: r.candidateFirstName ?? null,
-    candidateLastName: r.candidateLastName ?? null,
-    companyName: r.companyName ?? null,
+    attachments: attachmentsByTask.get(r.id) ?? [],
   }));
 
   return (
@@ -65,7 +59,7 @@ export default async function TachesPage() {
         </p>
       </div>
 
-      <KanbanBoard tasks={serialized} profiles={activeProfiles} isManager={isManager} />
+      <KanbanBoard tasks={serialized} profiles={activeProfiles} isManager={isManager} currentUserId={user.id} />
     </div>
   );
 }

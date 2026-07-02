@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useRef, useEffect, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ChevronUp, ChevronDown, MoreHorizontal,
   SlidersHorizontal, Check, Search,
@@ -14,6 +15,7 @@ import {
 import {
   updateCandidatCursus, updateCandidatOwner, type CandidatRow,
 } from "./actions";
+import { PermanentDeleteEntityButton } from "@/components/entities/PermanentDeleteEntityButton";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -422,6 +424,7 @@ export function PipelineList({
   profiles: { id: string; fullName: string }[];
   cursus: { id: string; name: string }[];
 }) {
+  const router = useRouter();
   const [filters, setFilters] = useState<Map<FilterKey, Set<string> | null>>(new Map());
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir } | null>({ key: "name", dir: "asc" });
 
@@ -544,18 +547,27 @@ export function PipelineList({
                       </DropdownMenu>
                     )}
                     {archived && (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger className="h-7 w-7 rounded flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent side="bottom" align="end">
-                          <DropdownMenuGroup>
-                            <DropdownMenuLabel>Remettre dans pipeline</DropdownMenuLabel>
-                            <DropdownMenuItem onClick={() => onStatusChange(c.id, "to_call")}>À appeler</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => onStatusChange(c.id, "in_progress")}>En cours</DropdownMenuItem>
-                          </DropdownMenuGroup>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      <div className="flex items-center gap-1">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger className="h-7 w-7 rounded flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent side="bottom" align="end">
+                            <DropdownMenuGroup>
+                              <DropdownMenuLabel>Remettre dans pipeline</DropdownMenuLabel>
+                              <DropdownMenuItem onClick={() => onStatusChange(c.id, "to_call")}>À appeler</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => onStatusChange(c.id, "in_progress")}>En cours</DropdownMenuItem>
+                            </DropdownMenuGroup>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                        <PermanentDeleteEntityButton
+                          entityType="candidate"
+                          entityId={c.id}
+                          label={`${c.firstName} ${c.lastName}`}
+                          iconOnly
+                          onDeleted={() => router.refresh()}
+                        />
+                      </div>
                     )}
                   </td>
                 </tr>

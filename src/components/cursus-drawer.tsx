@@ -17,15 +17,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { createCursus } from "@/app/(app)/cursus/actions";
+import { createCursus, type CursusRow } from "@/app/(app)/cursus/actions";
 import { createCursusSchema, type CreateCursusInput } from "@/app/(app)/cursus/schemas";
 
 interface CursusDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onCreated?: (cursus: CursusRow) => void;
 }
 
-export function CursusDrawer({ open, onOpenChange }: CursusDrawerProps) {
+export function CursusDrawer({ open, onOpenChange, onCreated }: CursusDrawerProps) {
   const [isPending, startTransition] = useTransition();
 
   const {
@@ -50,6 +51,7 @@ export function CursusDrawer({ open, onOpenChange }: CursusDrawerProps) {
         return;
       }
       toast.success(`Cursus « ${result.data.name} » créé`);
+      onCreated?.(result.data);
       reset();
       onOpenChange(false);
     });

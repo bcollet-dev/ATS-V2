@@ -1,0 +1,167 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2048" height="1550" viewBox="0 0 2048 1550">
+  <rect width="2048" height="1550" fill="#ffffff"/>
+  <style>
+    .title{font:700 26px Arial, sans-serif;fill:#111827}
+    .sub{font:400 20px Arial, sans-serif;fill:#737373}
+    .kpiNum{font:700 32px Arial, sans-serif;fill:#111827}
+    .kpiLabel{font:400 20px Arial, sans-serif;fill:#737373}
+    .name{font:700 22px Arial, sans-serif;fill:#111827}
+    .muted{font:400 18px Arial, sans-serif;fill:#737373}
+    .small{font:400 15px Arial, sans-serif;fill:#737373}
+    .badge{font:400 16px Arial, sans-serif}
+    .task{font:700 17px Arial, sans-serif;fill:#111827}
+  </style>
+
+  <rect x="22" y="16" width="2004" height="1488" rx="16" fill="#fff" stroke="#e5e7eb"/>
+  <text x="54" y="70" class="title">Pilotage equipe</text>
+  <text x="54" y="104" class="sub">Taches ouvertes, retards et prochaines echeances - simulation 10 collaborateurs</text>
+
+  <g transform="translate(54,142)">
+    <rect width="470" height="104" rx="14" fill="#fff" stroke="#e5e7eb"/>
+    <rect x="26" y="28" width="52" height="52" rx="12" fill="#eef2ff"/>
+    <path d="M39 57h26v13H39z M43 53l5-10h8l5 10" fill="none" stroke="#4f63ff" stroke-width="3" stroke-linejoin="round"/>
+    <text x="104" y="48" class="kpiNum">74</text>
+    <text x="104" y="82" class="kpiLabel">Ouvertes</text>
+  </g>
+  <g transform="translate(542,142)">
+    <rect width="470" height="104" rx="14" fill="#fff" stroke="#e5e7eb"/>
+    <rect x="26" y="28" width="52" height="52" rx="12" fill="#fef2f2"/>
+    <path d="M52 41l18 32H34z" fill="none" stroke="#dc2626" stroke-width="3" stroke-linejoin="round"/>
+    <text x="49" y="66" class="badge" fill="#dc2626">!</text>
+    <text x="104" y="48" class="kpiNum">18</text>
+    <text x="104" y="82" class="kpiLabel">En retard</text>
+  </g>
+  <g transform="translate(1030,142)">
+    <rect width="470" height="104" rx="14" fill="#fff" stroke="#e5e7eb"/>
+    <rect x="26" y="28" width="52" height="52" rx="12" fill="#f5f3ff"/>
+    <circle cx="47" cy="48" r="7" fill="none" stroke="#7c3aed" stroke-width="3"/>
+    <path d="M35 72c2-10 22-10 24 0" fill="none" stroke="#7c3aed" stroke-width="3"/>
+    <text x="104" y="48" class="kpiNum">5</text>
+    <text x="104" y="82" class="kpiLabel">Non assignees</text>
+  </g>
+  <g transform="translate(1518,142)">
+    <rect width="452" height="104" rx="14" fill="#fff" stroke="#e5e7eb"/>
+    <rect x="26" y="28" width="52" height="52" rx="12" fill="#fffbeb"/>
+    <rect x="39" y="44" width="27" height="25" rx="2" fill="none" stroke="#b45309" stroke-width="3"/>
+    <path d="M39 52h27" stroke="#b45309" stroke-width="3"/>
+    <text x="104" y="48" class="kpiNum">12</text>
+    <text x="104" y="82" class="kpiLabel">Aujourd'hui</text>
+  </g>
+
+  <!-- Cards -->
+  <g id="cards">
+    <g transform="translate(54,282)">
+      <rect width="610" height="274" rx="14" fill="#fff" stroke="#fecaca"/>
+      <circle cx="58" cy="62" r="32" fill="#fee2e2"/><text x="39" y="70" class="name" fill="#dc2626">BC</text>
+      <text x="112" y="54" class="name">Bastien Collet</text><text x="112" y="83" class="muted">12 taches ouvertes</text><text x="562" y="70" class="name" fill="#737373">&gt;</text>
+      <rect x="28" y="116" width="126" height="32" rx="16" fill="#eef2ff"/><text x="48" y="138" class="badge" fill="#4f63ff">7 a faire</text>
+      <rect x="168" y="116" width="118" height="32" rx="16" fill="#fef2f2"/><text x="188" y="138" class="badge" fill="#dc2626">5 retard</text>
+      <rect x="300" y="116" width="166" height="32" rx="16" fill="#fffbeb"/><text x="320" y="138" class="badge" fill="#b45309">2/1 ajd/demain</text>
+      <rect x="480" y="116" width="70" height="32" rx="16" fill="#ecfdf5"/><text x="505" y="138" class="badge" fill="#047857">9</text>
+      <path d="M28 172h554" stroke="#e5e7eb"/><text x="28" y="210" class="muted">Prochaine echeance</text><text x="28" y="241" class="task">Relancer FRE signee</text><text x="28" y="266" class="small" fill="#dc2626">Aujourd'hui</text>
+    </g>
+    <g transform="translate(694,282)">
+      <rect width="610" height="274" rx="14" fill="#fff" stroke="#fecaca"/>
+      <circle cx="58" cy="62" r="32" fill="#fee2e2"/><text x="38" y="70" class="name" fill="#dc2626">MS</text>
+      <text x="112" y="54" class="name">Maya Saidi</text><text x="112" y="83" class="muted">9 taches ouvertes</text><text x="562" y="70" class="name" fill="#737373">&gt;</text>
+      <rect x="28" y="116" width="126" height="32" rx="16" fill="#eef2ff"/><text x="48" y="138" class="badge" fill="#4f63ff">6 a faire</text>
+      <rect x="168" y="116" width="118" height="32" rx="16" fill="#fef2f2"/><text x="188" y="138" class="badge" fill="#dc2626">3 retard</text>
+      <rect x="300" y="116" width="166" height="32" rx="16" fill="#fffbeb"/><text x="320" y="138" class="badge" fill="#b45309">1/2 ajd/demain</text>
+      <rect x="480" y="116" width="70" height="32" rx="16" fill="#ecfdf5"/><text x="505" y="138" class="badge" fill="#047857">6</text>
+      <path d="M28 172h554" stroke="#e5e7eb"/><text x="28" y="210" class="muted">Prochaine echeance</text><text x="28" y="241" class="task">Envoyer CV a Optima</text><text x="28" y="266" class="small" fill="#dc2626">Aujourd'hui</text>
+    </g>
+    <g transform="translate(1334,282)">
+      <rect width="610" height="274" rx="14" fill="#fff" stroke="#e5e7eb"/>
+      <circle cx="58" cy="62" r="32" fill="#eef2ff"/><text x="40" y="70" class="name" fill="#4f63ff">JL</text>
+      <text x="112" y="54" class="name">Julie Lambert</text><text x="112" y="83" class="muted">8 taches ouvertes</text><text x="562" y="70" class="name" fill="#737373">&gt;</text>
+      <rect x="28" y="116" width="126" height="32" rx="16" fill="#eef2ff"/><text x="48" y="138" class="badge" fill="#4f63ff">7 a faire</text>
+      <rect x="168" y="116" width="118" height="32" rx="16" fill="#fef2f2"/><text x="188" y="138" class="badge" fill="#dc2626">1 retard</text>
+      <rect x="300" y="116" width="166" height="32" rx="16" fill="#fffbeb"/><text x="320" y="138" class="badge" fill="#b45309">2/0 ajd/demain</text>
+      <rect x="480" y="116" width="70" height="32" rx="16" fill="#ecfdf5"/><text x="505" y="138" class="badge" fill="#047857">4</text>
+      <path d="M28 172h554" stroke="#e5e7eb"/><text x="28" y="210" class="muted">Prochaine echeance</text><text x="28" y="241" class="task">Appeler candidat BTS</text><text x="28" y="266" class="small">2 juil.</text>
+    </g>
+
+    <g transform="translate(54,586)">
+      <rect width="610" height="274" rx="14" fill="#fff" stroke="#e5e7eb"/>
+      <circle cx="58" cy="62" r="32" fill="#eef2ff"/><text x="37" y="70" class="name" fill="#4f63ff">AD</text>
+      <text x="112" y="54" class="name">Antoine Dubois</text><text x="112" y="83" class="muted">7 taches ouvertes</text><text x="562" y="70" class="name" fill="#737373">&gt;</text>
+      <rect x="28" y="116" width="126" height="32" rx="16" fill="#eef2ff"/><text x="48" y="138" class="badge" fill="#4f63ff">6 a faire</text>
+      <rect x="168" y="116" width="118" height="32" rx="16" fill="#fef2f2"/><text x="188" y="138" class="badge" fill="#dc2626">1 retard</text>
+      <rect x="300" y="116" width="166" height="32" rx="16" fill="#fffbeb"/><text x="320" y="138" class="badge" fill="#b45309">1/1 ajd/demain</text>
+      <rect x="480" y="116" width="70" height="32" rx="16" fill="#ecfdf5"/><text x="505" y="138" class="badge" fill="#047857">3</text>
+      <path d="M28 172h554" stroke="#e5e7eb"/><text x="28" y="210" class="muted">Prochaine echeance</text><text x="28" y="241" class="task">Relance entreprise</text><text x="28" y="266" class="small">2 juil.</text>
+    </g>
+    <g transform="translate(694,586)">
+      <rect width="610" height="274" rx="14" fill="#fff" stroke="#e5e7eb"/>
+      <circle cx="58" cy="62" r="32" fill="#f5f3ff"/><text x="37" y="70" class="name" fill="#7c3aed">EM</text>
+      <text x="112" y="54" class="name">Emma Martin</text><text x="112" y="83" class="muted">7 taches ouvertes</text><text x="562" y="70" class="name" fill="#737373">&gt;</text>
+      <rect x="28" y="116" width="126" height="32" rx="16" fill="#eef2ff"/><text x="48" y="138" class="badge" fill="#4f63ff">7 a faire</text>
+      <rect x="168" y="116" width="118" height="32" rx="16" fill="#fef2f2"/><text x="188" y="138" class="badge" fill="#dc2626">0 retard</text>
+      <rect x="300" y="116" width="166" height="32" rx="16" fill="#fffbeb"/><text x="320" y="138" class="badge" fill="#b45309">1/2 ajd/demain</text>
+      <rect x="480" y="116" width="70" height="32" rx="16" fill="#ecfdf5"/><text x="505" y="138" class="badge" fill="#047857">5</text>
+      <path d="M28 172h554" stroke="#e5e7eb"/><text x="28" y="210" class="muted">Prochaine echeance</text><text x="28" y="241" class="task">Verifier pieces candidat</text><text x="28" y="266" class="small">3 juil.</text>
+    </g>
+    <g transform="translate(1334,586)">
+      <rect width="610" height="274" rx="14" fill="#fff" stroke="#fecaca"/>
+      <circle cx="58" cy="62" r="32" fill="#fee2e2"/><text x="38" y="70" class="name" fill="#dc2626">NS</text>
+      <text x="112" y="54" class="name">Nora Silva</text><text x="112" y="83" class="muted">7 taches ouvertes</text><text x="562" y="70" class="name" fill="#737373">&gt;</text>
+      <rect x="28" y="116" width="126" height="32" rx="16" fill="#eef2ff"/><text x="48" y="138" class="badge" fill="#4f63ff">5 a faire</text>
+      <rect x="168" y="116" width="118" height="32" rx="16" fill="#fef2f2"/><text x="188" y="138" class="badge" fill="#dc2626">2 retard</text>
+      <rect x="300" y="116" width="166" height="32" rx="16" fill="#fffbeb"/><text x="320" y="138" class="badge" fill="#b45309">2/0 ajd/demain</text>
+      <rect x="480" y="116" width="70" height="32" rx="16" fill="#ecfdf5"/><text x="505" y="138" class="badge" fill="#047857">7</text>
+      <path d="M28 172h554" stroke="#e5e7eb"/><text x="28" y="210" class="muted">Prochaine echeance</text><text x="28" y="241" class="task">Point contrat</text><text x="28" y="266" class="small" fill="#dc2626">Hier</text>
+    </g>
+
+    <g transform="translate(54,890)">
+      <rect width="610" height="274" rx="14" fill="#fff" stroke="#e5e7eb"/>
+      <circle cx="58" cy="62" r="32" fill="#eef2ff"/><text x="39" y="70" class="name" fill="#4f63ff">PL</text>
+      <text x="112" y="54" class="name">Paul Lefevre</text><text x="112" y="83" class="muted">6 taches ouvertes</text><text x="562" y="70" class="name" fill="#737373">&gt;</text>
+      <rect x="28" y="116" width="126" height="32" rx="16" fill="#eef2ff"/><text x="48" y="138" class="badge" fill="#4f63ff">6 a faire</text>
+      <rect x="168" y="116" width="118" height="32" rx="16" fill="#fef2f2"/><text x="188" y="138" class="badge" fill="#dc2626">0 retard</text>
+      <rect x="300" y="116" width="166" height="32" rx="16" fill="#fffbeb"/><text x="320" y="138" class="badge" fill="#b45309">1/1 ajd/demain</text>
+      <rect x="480" y="116" width="70" height="32" rx="16" fill="#ecfdf5"/><text x="505" y="138" class="badge" fill="#047857">2</text>
+      <path d="M28 172h554" stroke="#e5e7eb"/><text x="28" y="210" class="muted">Prochaine echeance</text><text x="28" y="241" class="task">Planifier entretien</text><text x="28" y="266" class="small">4 juil.</text>
+    </g>
+    <g transform="translate(694,890)">
+      <rect width="610" height="274" rx="14" fill="#fff" stroke="#e5e7eb"/>
+      <circle cx="58" cy="62" r="32" fill="#f5f3ff"/><text x="39" y="70" class="name" fill="#7c3aed">CR</text>
+      <text x="112" y="54" class="name">Camille Robert</text><text x="112" y="83" class="muted">5 taches ouvertes</text><text x="562" y="70" class="name" fill="#737373">&gt;</text>
+      <rect x="28" y="116" width="126" height="32" rx="16" fill="#eef2ff"/><text x="48" y="138" class="badge" fill="#4f63ff">4 a faire</text>
+      <rect x="168" y="116" width="118" height="32" rx="16" fill="#fef2f2"/><text x="188" y="138" class="badge" fill="#dc2626">1 retard</text>
+      <rect x="300" y="116" width="166" height="32" rx="16" fill="#fffbeb"/><text x="320" y="138" class="badge" fill="#b45309">1/0 ajd/demain</text>
+      <rect x="480" y="116" width="70" height="32" rx="16" fill="#ecfdf5"/><text x="505" y="138" class="badge" fill="#047857">4</text>
+      <path d="M28 172h554" stroke="#e5e7eb"/><text x="28" y="210" class="muted">Prochaine echeance</text><text x="28" y="241" class="task">Relancer signature</text><text x="28" y="266" class="small">4 juil.</text>
+    </g>
+    <g transform="translate(1334,890)">
+      <rect width="610" height="274" rx="14" fill="#fff" stroke="#e5e7eb"/>
+      <circle cx="58" cy="62" r="32" fill="#ecfdf5"/><text x="38" y="70" class="name" fill="#047857">YD</text>
+      <text x="112" y="54" class="name">Yanis Diallo</text><text x="112" y="83" class="muted">5 taches ouvertes</text><text x="562" y="70" class="name" fill="#737373">&gt;</text>
+      <rect x="28" y="116" width="126" height="32" rx="16" fill="#eef2ff"/><text x="48" y="138" class="badge" fill="#4f63ff">5 a faire</text>
+      <rect x="168" y="116" width="118" height="32" rx="16" fill="#fef2f2"/><text x="188" y="138" class="badge" fill="#dc2626">0 retard</text>
+      <rect x="300" y="116" width="166" height="32" rx="16" fill="#fffbeb"/><text x="320" y="138" class="badge" fill="#b45309">0/2 ajd/demain</text>
+      <rect x="480" y="116" width="70" height="32" rx="16" fill="#ecfdf5"/><text x="505" y="138" class="badge" fill="#047857">3</text>
+      <path d="M28 172h554" stroke="#e5e7eb"/><text x="28" y="210" class="muted">Prochaine echeance</text><text x="28" y="241" class="task">Controle dossier FRE</text><text x="28" y="266" class="small">5 juil.</text>
+    </g>
+
+    <g transform="translate(54,1194)">
+      <rect width="610" height="274" rx="14" fill="#fff" stroke="#fecaca"/>
+      <circle cx="58" cy="62" r="32" fill="#fee2e2"/><text x="40" y="70" class="name" fill="#dc2626">NA</text>
+      <text x="112" y="54" class="name">Non assignees</text><text x="112" y="83" class="muted">5 taches ouvertes</text><text x="562" y="70" class="name" fill="#737373">&gt;</text>
+      <rect x="28" y="116" width="126" height="32" rx="16" fill="#eef2ff"/><text x="48" y="138" class="badge" fill="#4f63ff">2 a faire</text>
+      <rect x="168" y="116" width="118" height="32" rx="16" fill="#fef2f2"/><text x="188" y="138" class="badge" fill="#dc2626">3 retard</text>
+      <rect x="300" y="116" width="166" height="32" rx="16" fill="#fffbeb"/><text x="320" y="138" class="badge" fill="#b45309">1/0 ajd/demain</text>
+      <rect x="480" y="116" width="70" height="32" rx="16" fill="#ecfdf5"/><text x="505" y="138" class="badge" fill="#047857">0</text>
+      <path d="M28 172h554" stroke="#e5e7eb"/><text x="28" y="210" class="muted">Prochaine echeance</text><text x="28" y="241" class="task">Tache a attribuer</text><text x="28" y="266" class="small" fill="#dc2626">Hier</text>
+    </g>
+    <g transform="translate(694,1194)">
+      <rect width="610" height="274" rx="14" fill="#fff" stroke="#e5e7eb"/>
+      <circle cx="58" cy="62" r="32" fill="#f5f3ff"/><text x="39" y="70" class="name" fill="#7c3aed">SL</text>
+      <text x="112" y="54" class="name">Sarah Leroy</text><text x="112" y="83" class="muted">4 taches ouvertes</text><text x="562" y="70" class="name" fill="#737373">&gt;</text>
+      <rect x="28" y="116" width="126" height="32" rx="16" fill="#eef2ff"/><text x="48" y="138" class="badge" fill="#4f63ff">4 a faire</text>
+      <rect x="168" y="116" width="118" height="32" rx="16" fill="#fef2f2"/><text x="188" y="138" class="badge" fill="#dc2626">0 retard</text>
+      <rect x="300" y="116" width="166" height="32" rx="16" fill="#fffbeb"/><text x="320" y="138" class="badge" fill="#b45309">0/1 ajd/demain</text>
+      <rect x="480" y="116" width="70" height="32" rx="16" fill="#ecfdf5"/><text x="505" y="138" class="badge" fill="#047857">8</text>
+      <path d="M28 172h554" stroke="#e5e7eb"/><text x="28" y="210" class="muted">Prochaine echeance</text><text x="28" y="241" class="task">Mail entreprise</text><text x="28" y="266" class="small">6 juil.</text>
+    </g>
+  </g>
+</svg>

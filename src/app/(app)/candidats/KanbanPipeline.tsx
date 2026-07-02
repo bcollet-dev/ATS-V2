@@ -632,6 +632,8 @@ export function KanbanPipeline({
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <div className="px-6 py-4 overflow-x-auto">
         <div className="flex gap-3 min-w-max pb-4">
+          <ArchiveDropZone />
+          <div className="w-px bg-border self-stretch mx-1" />
           {ACTIVE_STATUSES.map(({ key, label }) => (
             <DroppableColumn
               key={key}
@@ -642,8 +644,6 @@ export function KanbanPipeline({
               activeId={activeId}
             />
           ))}
-          <div className="w-px bg-border self-stretch mx-1" />
-          <ArchiveDropZone />
         </div>
       </div>
       <DragOverlay>

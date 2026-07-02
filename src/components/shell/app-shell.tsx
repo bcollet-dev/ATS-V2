@@ -15,7 +15,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Pencil } from "lucide-react";
+import { Mail, Pencil } from "lucide-react";
 import { signOut } from "@/app/(auth)/login/actions";
 import { NotificationBell } from "./NotificationBell";
 import { EditNameModal } from "@/app/(app)/onboarding/EditNameModal";
@@ -44,6 +44,7 @@ export function AppShell({
   const pathname = usePathname();
   const isAdmin = user.role === "admin" || user.role === "direction";
   const [editNameOpen, setEditNameOpen] = useState(false);
+  const gmailConnectHref = `/auth/gmail/connect?next=${encodeURIComponent(pathname || "/dashboard")}`;
 
   const initials = user.fullName
     .split(" ")
@@ -161,6 +162,24 @@ export function AppShell({
 
       {/* Main content */}
       <main className="flex-1 overflow-y-auto">
+        {!user.googleRefreshToken && (
+          <div className="border-b border-amber-200 bg-amber-50 px-6 py-2.5">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2 min-w-0 text-amber-900">
+                <Mail className="h-4 w-4 shrink-0" />
+                <p className="text-sm truncate">
+                  Gmail n'est pas connecte. Activez-le pour envoyer des emails depuis l'ATS.
+                </p>
+              </div>
+              <a
+                href={gmailConnectHref}
+                className="inline-flex h-8 shrink-0 items-center justify-center rounded-md bg-amber-900 px-3 text-xs font-medium text-white transition-colors hover:bg-amber-800"
+              >
+                Connecter Gmail
+              </a>
+            </div>
+          </div>
+        )}
         {children}
       </main>
 

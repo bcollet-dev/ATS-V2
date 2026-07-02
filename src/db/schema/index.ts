@@ -5,6 +5,7 @@ export * from "./candidates";
 export * from "./companies";
 export * from "./ypareo";
 export * from "./needs";
+export * from "./need-cursus";
 export * from "./matchings";
 export * from "./documents";
 export * from "./tasks";
