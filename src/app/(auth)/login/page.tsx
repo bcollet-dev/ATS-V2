@@ -11,7 +11,7 @@ export default async function LoginPage({
 }) {
   const { error } = await searchParams;
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted/30">
+    <div className="flex min-h-[100dvh] items-center justify-center bg-muted/30 p-4">
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center space-y-2">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-[var(--color-eda-rh)] text-white font-bold text-lg">

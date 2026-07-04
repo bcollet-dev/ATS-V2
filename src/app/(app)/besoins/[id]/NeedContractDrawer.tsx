@@ -20,6 +20,14 @@ import { updateNeedContractFields, type ContractFields } from "@/app/(app)/besoi
 type Props = {
   needId: string;
   initialValues: ContractFields;
+  contacts: Array<{
+    id: string;
+    firstName: string;
+    lastName: string;
+    jobTitle: string | null;
+    email: string | null;
+    phone: string | null;
+  }>;
   canEdit: boolean;
 };
 
@@ -39,6 +47,8 @@ const OVERTIME_OPTIONS = [
   { value: "payées", label: "Payées" },
   { value: "récupérées", label: "Récupérées" },
 ];
+
+const REMUNERATION_ROWS = Array.from({ length: 8 }, (_, index) => index + 1);
 
 function Field({
   label,
@@ -63,12 +73,12 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function NeedContractDrawer({ needId, initialValues, canEdit }: Props) {
+export function NeedContractDrawer({ needId, initialValues, contacts, canEdit }: Props) {
   const [open, setOpen] = useState(false);
   const [values, setValues] = useState<ContractFields>(initialValues);
   const [isPending, startTransition] = useTransition();
 
-  function set(key: keyof ContractFields, value: string) {
+  function set(key: keyof ContractFields | string, value: string) {
     setValues((v) => ({ ...v, [key]: value || undefined }));
   }
 
@@ -127,6 +137,39 @@ export function NeedContractDrawer({ needId, initialValues, canEdit }: Props) {
                 </select>
               </Field>
 
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Field label="Date de conclusion">
+                  <Input
+                    type="date"
+                    value={values.contractConclusionDate ?? ""}
+                    onChange={(e) => set("contractConclusionDate", e.target.value)}
+                  />
+                </Field>
+                <Field label="Date de début d'exécution">
+                  <Input
+                    type="date"
+                    value={values.startDate ?? ""}
+                    onChange={(e) => set("startDate", e.target.value)}
+                  />
+                </Field>
+              </div>
+
+              <Field label="Date de début chez l'employeur">
+                <Input
+                  type="date"
+                  value={values.contractPracticalStartDate ?? ""}
+                  onChange={(e) => set("contractPracticalStartDate", e.target.value)}
+                />
+              </Field>
+
+              <Field label="Fait a">
+                <Input
+                  placeholder="Courbevoie"
+                  value={values.contractMadeAt ?? ""}
+                  onChange={(e) => set("contractMadeAt", e.target.value)}
+                />
+              </Field>
+
               <Field label="Durée hebdomadaire (heures)">
                 <Input
                   placeholder="ex. 35"
@@ -135,7 +178,7 @@ export function NeedContractDrawer({ needId, initialValues, canEdit }: Props) {
                 />
               </Field>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Field label="Référence de salaire">
                   <select
                     value={values.salaryReference ?? ""}
@@ -172,6 +215,65 @@ export function NeedContractDrawer({ needId, initialValues, canEdit }: Props) {
                 </select>
               </Field>
 
+              <div className="space-y-3 rounded-md border bg-muted/20 p-3">
+                <p className="text-xs font-medium text-muted-foreground">Rémunération</p>
+                <div className="space-y-3">
+                  {REMUNERATION_ROWS.map((position) => (
+                    <div key={position} className="rounded-md border bg-background p-2">
+                      <p className="mb-2 text-[11px] font-medium text-muted-foreground">
+                        Periode {position}
+                      </p>
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <Field label="Debut">
+                          <Input
+                            type="date"
+                            value={values[`remunerationStart${position}`] ?? ""}
+                            onChange={(e) => set(`remunerationStart${position}`, e.target.value)}
+                          />
+                        </Field>
+                        <Field label="Fin">
+                          <Input
+                            type="date"
+                            value={values[`remunerationEnd${position}`] ?? ""}
+                            onChange={(e) => set(`remunerationEnd${position}`, e.target.value)}
+                          />
+                        </Field>
+                        <Field label="Pourcentage">
+                          <Input
+                            placeholder="ex. 85"
+                            value={values[`remunerationPercent${position}`] ?? ""}
+                            onChange={(e) => set(`remunerationPercent${position}`, e.target.value)}
+                          />
+                        </Field>
+                        <Field label="Base">
+                          <Input
+                            placeholder="SMIC ou SMC"
+                            value={values[`remunerationReference${position}`] ?? ""}
+                            onChange={(e) => set(`remunerationReference${position}`, e.target.value)}
+                          />
+                        </Field>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Field label="Salaire brut mensuel">
+                    <Input
+                      placeholder="ex. 1 586,96"
+                      value={values.monthlyGrossSalary ?? ""}
+                      onChange={(e) => set("monthlyGrossSalary", e.target.value)}
+                    />
+                  </Field>
+                  <Field label="Salaire brut horaire">
+                    <Input
+                      placeholder="ex. 11,65"
+                      value={values.hourlyGrossSalary ?? ""}
+                      onChange={(e) => set("hourlyGrossSalary", e.target.value)}
+                    />
+                  </Field>
+                </div>
+              </div>
+
               <Field label="Date de fin de contrat">
                 <Input
                   type="date"
@@ -179,13 +281,47 @@ export function NeedContractDrawer({ needId, initialValues, canEdit }: Props) {
                   onChange={(e) => set("endDate", e.target.value)}
                 />
               </Field>
+
+              <Field label="Code RNCP">
+                <Input
+                  placeholder="ex. RNCP12345"
+                  value={values.rncpCode ?? ""}
+                  onChange={(e) => set("rncpCode", e.target.value)}
+                />
+              </Field>
+            </div>
+
+            <div className="space-y-3">
+              <SectionTitle>Contact contrat</SectionTitle>
+
+              <Field label="Contact à qui envoyer le contrat">
+                <select
+                  value={values.contactId ?? ""}
+                  onChange={(e) => set("contactId", e.target.value)}
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                >
+                  <option value="">— Même personne que le tuteur —</option>
+                  {contacts.map((contact) => (
+                    <option key={contact.id} value={contact.id}>
+                      {contact.firstName} {contact.lastName}
+                      {contact.jobTitle ? ` — ${contact.jobTitle}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              {contacts.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Aucun contact enregistré sur la fiche entreprise.
+                </p>
+              )}
             </div>
 
             {/* Section Maître d'apprentissage */}
             <div className="space-y-3">
               <SectionTitle>Maître d&apos;apprentissage</SectionTitle>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Field label="Prénom">
                   <Input
                     placeholder="Prénom"
@@ -210,7 +346,7 @@ export function NeedContractDrawer({ needId, initialValues, canEdit }: Props) {
                 />
               </Field>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Field label="Date de naissance">
                   <Input
                     type="date"
@@ -227,7 +363,7 @@ export function NeedContractDrawer({ needId, initialValues, canEdit }: Props) {
                 </Field>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Field label="Téléphone">
                   <Input
                     type="tel"
@@ -245,13 +381,29 @@ export function NeedContractDrawer({ needId, initialValues, canEdit }: Props) {
                   />
                 </Field>
               </div>
+
+              <Field label="Diplôme le plus élevé obtenu">
+                <Input
+                  placeholder="ex. Master RH"
+                  value={values.masterDiploma ?? ""}
+                  onChange={(e) => set("masterDiploma", e.target.value)}
+                />
+              </Field>
+
+              <Field label="Niveau du diplôme le plus élevé">
+                <Input
+                  placeholder="ex. 7"
+                  value={values.masterDiplomaLevel ?? ""}
+                  onChange={(e) => set("masterDiplomaLevel", e.target.value)}
+                />
+              </Field>
             </div>
 
             {/* Section Avantages en nature */}
             <div className="space-y-3">
               <SectionTitle>Avantages en nature</SectionTitle>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Field label="Repas (€/repas)">
                   <Input
                     placeholder="ex. 4.50"

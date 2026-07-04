@@ -5,6 +5,7 @@ import { candidateFormations, activityEvents } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
+import { can, type AppRole } from "@/lib/permissions";
 
 export type FormationInput = {
   title: string;
@@ -32,6 +33,7 @@ export async function addFormation(
 ): Promise<{ success: boolean; data?: FormationRow; error?: string }> {
   const user = await getCurrentUser();
   if (!user) return { success: false, error: "Non authentifié" };
+  if (!can(user.role as AppRole, "candidates:edit")) return { success: false, error: "Non autorisé" };
 
   const [row] = await db
     .insert(candidateFormations)
@@ -71,6 +73,7 @@ export async function updateFormation(
 ): Promise<{ success: boolean; data?: FormationRow; error?: string }> {
   const user = await getCurrentUser();
   if (!user) return { success: false, error: "Non authentifié" };
+  if (!can(user.role as AppRole, "candidates:edit")) return { success: false, error: "Non autorisé" };
 
   const [row] = await db
     .update(candidateFormations)
@@ -102,6 +105,7 @@ export async function deleteFormation(
 ): Promise<{ success: boolean; error?: string }> {
   const user = await getCurrentUser();
   if (!user) return { success: false, error: "Non authentifié" };
+  if (!can(user.role as AppRole, "candidates:edit")) return { success: false, error: "Non autorisé" };
 
   await db.delete(candidateFormations).where(eq(candidateFormations.id, id));
   revalidatePath(`/candidats/${candidateId}`);

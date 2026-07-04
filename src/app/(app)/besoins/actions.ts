@@ -1,13 +1,17 @@
 "use server";
 
 import { requireAuth } from "@/lib/auth";
+import { can, type AppRole } from "@/lib/permissions";
 import { db } from "@/db";
 import { needs, companies, cursus, profiles, tasks, taskLinks, matchings, candidates, needCursus, notifications } from "@/db/schema";
-import { eq, isNull, and, asc, inArray, notInArray, sql } from "drizzle-orm";
+import { eq, isNull, and, asc, inArray, notInArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { logActivityEvent } from "@/lib/activity";
 import { parseTaskCategory } from "@/lib/task-service";
+import { normalizeNeedPipelineStatus } from "@/app/(app)/matching/rules";
+import { syncCandidateStatusFromMatchings } from "@/app/(app)/matching/actions";
+import { normalizeContractDate, normalizeRemunerationLines } from "@/lib/cerfa-mapping";
 
 const createNeedSchema = z.object({
   companyId: z.string().uuid("Entreprise requise"),
@@ -142,7 +146,7 @@ export async function loadPipelineNeeds(): Promise<NeedRow[]> {
   const needIds = rows.map((r) => r.id);
   const companyIds = rows.map((r) => r.companyId);
 
-  const [nextTaskRows, activeCountRows, waitingFreCountRows, interviewCountRows, candidateRows] = await Promise.all([
+  const [nextTaskRows, candidateRows] = await Promise.all([
     db
       .select({ companyId: taskLinks.entityId, dueAt: tasks.dueAt })
       .from(taskLinks)
@@ -156,42 +160,6 @@ export async function loadPipelineNeeds(): Promise<NeedRow[]> {
         )
       )
       .orderBy(asc(tasks.dueAt)),
-    db
-      .select({ needId: matchings.needId, count: sql<number>`count(*)::int` })
-      .from(matchings)
-      .innerJoin(candidates, eq(matchings.candidateId, candidates.id))
-      .where(
-        and(
-          inArray(matchings.needId, needIds),
-          notInArray(matchings.propositionStatus, ["not_retained"]),
-          isNull(candidates.deletedAt),
-        )
-      )
-      .groupBy(matchings.needId),
-    db
-      .select({ needId: matchings.needId, count: sql<number>`count(*)::int` })
-      .from(matchings)
-      .innerJoin(candidates, eq(matchings.candidateId, candidates.id))
-      .where(
-        and(
-          inArray(matchings.needId, needIds),
-          eq(matchings.propositionStatus, "waiting_fre"),
-          isNull(candidates.deletedAt),
-        )
-      )
-      .groupBy(matchings.needId),
-    db
-      .select({ needId: matchings.needId, count: sql<number>`count(*)::int` })
-      .from(matchings)
-      .innerJoin(candidates, eq(matchings.candidateId, candidates.id))
-      .where(
-        and(
-          inArray(matchings.needId, needIds),
-          eq(matchings.propositionStatus, "interview"),
-          isNull(candidates.deletedAt),
-        )
-      )
-      .groupBy(matchings.needId),
     db
       .select({
         needId: matchings.needId,
@@ -221,15 +189,21 @@ export async function loadPipelineNeeds(): Promise<NeedRow[]> {
   }
 
   const candidatesByNeed = new Map<string, Array<{ matchingId: string; candidateId: string; firstName: string; propositionStatus: string; isFrozen: boolean }>>();
+  const activeCountMap = new Map<string, number>();
+  const waitingFreCountMap = new Map<string, number>();
+  const interviewCountMap = new Map<string, number>();
   for (const r of candidateRows) {
     const nid = r.needId as string;
     if (!candidatesByNeed.has(nid)) candidatesByNeed.set(nid, []);
     candidatesByNeed.get(nid)!.push({ matchingId: r.matchingId, candidateId: r.candidateId, firstName: r.firstName, propositionStatus: r.propositionStatus, isFrozen: r.isFrozen });
+    activeCountMap.set(nid, (activeCountMap.get(nid) ?? 0) + 1);
+    if (r.propositionStatus === "waiting_fre") {
+      waitingFreCountMap.set(nid, (waitingFreCountMap.get(nid) ?? 0) + 1);
+    }
+    if (r.propositionStatus === "interview") {
+      interviewCountMap.set(nid, (interviewCountMap.get(nid) ?? 0) + 1);
+    }
   }
-
-  const activeCountMap = new Map(activeCountRows.map((r) => [r.needId as string, Number(r.count)]));
-  const waitingFreCountMap = new Map(waitingFreCountRows.map((r) => [r.needId as string, Number(r.count)]));
-  const interviewCountMap = new Map(interviewCountRows.map((r) => [r.needId as string, Number(r.count)]));
 
   const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
 
@@ -248,7 +222,7 @@ export async function loadPipelineNeeds(): Promise<NeedRow[]> {
       targetCursusName: r.targetCursusName ?? null,
       city: r.city ?? null,
       positionsCount: r.positionsCount,
-      status: r.status,
+      status: normalizeNeedPipelineStatus(r.status),
       ownerId: r.ownerId ?? null,
       ownerName: r.ownerName ?? null,
       nextTaskAt,
@@ -264,7 +238,8 @@ export async function loadPipelineNeeds(): Promise<NeedRow[]> {
 }
 
 export async function updateNeedStatus(id: string, status: string, lostReason?: string) {
-  await requireAuth();
+  const actor = await requireAuth();
+  if (!can(actor.role as AppRole, "needs:edit")) return;
   await db
     .update(needs)
     .set({
@@ -275,16 +250,26 @@ export async function updateNeedStatus(id: string, status: string, lostReason?: 
     .where(eq(needs.id, id));
 
   if (status === "lost") {
-    // Cascade: mark all active matchings as not_retained
-    await db
-      .update(matchings)
-      .set({ propositionStatus: "not_retained", updatedAt: new Date() })
+    const activeMatchings = await db
+      .select({ id: matchings.id, candidateId: matchings.candidateId })
+      .from(matchings)
       .where(
         and(
           eq(matchings.needId, id),
           notInArray(matchings.propositionStatus, ["not_retained"])
         )
       );
+
+    // Cascade: mark all active matchings as not_retained
+    if (activeMatchings.length > 0) {
+      await db
+        .update(matchings)
+        .set({ propositionStatus: "not_retained", updatedAt: new Date() })
+        .where(inArray(matchings.id, activeMatchings.map((matching) => matching.id)));
+
+      const candidateIds = [...new Set(activeMatchings.map((matching) => matching.candidateId as string))];
+      await Promise.all(candidateIds.map(syncCandidateStatusFromMatchings));
+    }
     revalidatePath("/candidats");
   }
 
@@ -292,7 +277,8 @@ export async function updateNeedStatus(id: string, status: string, lostReason?: 
 }
 
 export async function permanentlyDeleteNeed(id: string): Promise<{ success: boolean; error?: string }> {
-  await requireAuth();
+  const actor = await requireAuth();
+  if (!can(actor.role as AppRole, "needs:delete")) return { success: false, error: "Non autorisé" };
 
   const [need] = await db
     .select({ status: needs.status })
@@ -318,7 +304,8 @@ export async function permanentlyDeleteNeed(id: string): Promise<{ success: bool
 }
 
 export async function updateNeedTitle(id: string, title: string) {
-  await requireAuth();
+  const actor = await requireAuth();
+  if (!can(actor.role as AppRole, "needs:edit")) return;
   if (!title.trim()) return;
   await db
     .update(needs)
@@ -328,7 +315,8 @@ export async function updateNeedTitle(id: string, title: string) {
 }
 
 export async function updateNeedCursus(id: string, targetCursusId: string | null) {
-  await requireAuth();
+  const actor = await requireAuth();
+  if (!can(actor.role as AppRole, "needs:edit")) return;
   await db
     .update(needs)
     .set({ targetCursusId: targetCursusId || null, updatedAt: new Date() })
@@ -337,7 +325,8 @@ export async function updateNeedCursus(id: string, targetCursusId: string | null
 }
 
 export async function updateNeedOwner(id: string, ownerId: string | null) {
-  await requireAuth();
+  const actor = await requireAuth();
+  if (!can(actor.role as AppRole, "needs:edit")) return;
   await db
     .update(needs)
     .set({ ownerId: ownerId || null, updatedAt: new Date() })
@@ -346,7 +335,8 @@ export async function updateNeedOwner(id: string, ownerId: string | null) {
 }
 
 export async function updateNeedCity(id: string, city: string | null) {
-  await requireAuth();
+  const actor = await requireAuth();
+  if (!can(actor.role as AppRole, "needs:edit")) return;
   await db
     .update(needs)
     .set({ city: city?.trim() || null, updatedAt: new Date() })
@@ -354,13 +344,33 @@ export async function updateNeedCity(id: string, city: string | null) {
   revalidatePath("/besoins");
 }
 
+const remunerationFieldSchema = Object.fromEntries(
+  Array.from({ length: 8 }, (_, index) => {
+    const position = index + 1;
+    return [
+      [`remunerationStart${position}`, z.string().optional()],
+      [`remunerationEnd${position}`, z.string().optional()],
+      [`remunerationPercent${position}`, z.string().optional()],
+      [`remunerationReference${position}`, z.string().optional()],
+    ];
+  }).flat(),
+);
+
 const contractFieldsSchema = z.object({
+  contactId: z.string().optional(),
+  startDate: z.string().optional(),
   weeklyHours: z.string().optional(),
   contractType: z.string().optional(),
+  contractConclusionDate: z.string().optional(),
+  contractPracticalStartDate: z.string().optional(),
+  contractMadeAt: z.string().optional(),
   salaryReference: z.string().optional(),
   smcAmount: z.string().optional(),
   overtimeHandling: z.string().optional(),
   endDate: z.string().optional(),
+  monthlyGrossSalary: z.string().optional(),
+  hourlyGrossSalary: z.string().optional(),
+  rncpCode: z.string().optional(),
   masterFirstName: z.string().optional(),
   masterLastName: z.string().optional(),
   masterBirthName: z.string().optional(),
@@ -368,9 +378,12 @@ const contractFieldsSchema = z.object({
   masterJobTitle: z.string().optional(),
   masterPhone: z.string().optional(),
   masterEmail: z.string().optional(),
+  masterDiploma: z.string().optional(),
+  masterDiplomaLevel: z.string().optional(),
   benefitFood: z.string().optional(),
   benefitHousing: z.string().optional(),
   benefitOther: z.string().optional(),
+  ...remunerationFieldSchema,
 });
 
 export type ContractFields = z.infer<typeof contractFieldsSchema>;
@@ -380,20 +393,43 @@ export async function updateNeedContractFields(
   fields: ContractFields
 ): Promise<{ success: boolean; error?: string }> {
   const actor = await requireAuth();
+  if (!can(actor.role as AppRole, "needs:edit")) return { success: false, error: "Non autorisé" };
   const parsed = contractFieldsSchema.safeParse(fields);
   if (!parsed.success) return { success: false, error: parsed.error.errors[0].message };
 
   const d = parsed.data;
+  const startYear = normalizeContractDate(d.startDate)?.slice(0, 4) ?? null;
+  const remunerationLines = normalizeRemunerationLines(
+    Array.from({ length: 8 }, (_, index) => {
+      const position = index + 1;
+      return {
+        startDate: d[`remunerationStart${position}`],
+        endDate: d[`remunerationEnd${position}`],
+        percent: d[`remunerationPercent${position}`],
+        reference: d[`remunerationReference${position}`],
+      };
+    }),
+    { defaultReference: d.salaryReference, fallbackYear: startYear },
+  );
 
   await db
     .update(needs)
     .set({
       weeklyHours: d.weeklyHours ?? null,
+      contactId: d.contactId ?? null,
+      startDate: normalizeContractDate(d.startDate),
       contractType: d.contractType ?? null,
+      contractConclusionDate: normalizeContractDate(d.contractConclusionDate),
+      contractPracticalStartDate: normalizeContractDate(d.contractPracticalStartDate),
+      contractMadeAt: d.contractMadeAt?.trim() || "Courbevoie",
       salaryReference: d.salaryReference ?? null,
       smcAmount: d.smcAmount ?? null,
       overtimeHandling: d.overtimeHandling ?? null,
-      endDate: d.endDate ?? null,
+      endDate: normalizeContractDate(d.endDate),
+      remunerationLines: remunerationLines.length > 0 ? remunerationLines : null,
+      monthlyGrossSalary: d.monthlyGrossSalary ?? null,
+      hourlyGrossSalary: d.hourlyGrossSalary ?? null,
+      rncpCode: d.rncpCode ?? null,
       masterFirstName: d.masterFirstName ?? null,
       masterLastName: d.masterLastName ?? null,
       masterBirthName: d.masterBirthName ?? null,
@@ -401,6 +437,8 @@ export async function updateNeedContractFields(
       masterJobTitle: d.masterJobTitle ?? null,
       masterPhone: d.masterPhone ?? null,
       masterEmail: d.masterEmail ?? null,
+      masterDiploma: d.masterDiploma ?? null,
+      masterDiplomaLevel: d.masterDiplomaLevel ?? null,
       benefitFood: d.benefitFood ?? null,
       benefitHousing: d.benefitHousing ?? null,
       benefitOther: d.benefitOther ?? null,
@@ -421,6 +459,7 @@ export async function updateNeedContractFields(
 
 export async function syncNeedCursus(needId: string, cursusIds: string[]): Promise<void> {
   const actor = await requireAuth();
+  if (!can(actor.role as AppRole, "needs:edit")) return;
 
   await db.delete(needCursus).where(eq(needCursus.needId, needId));
 

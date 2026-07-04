@@ -158,14 +158,14 @@ export function KanbanBoard({
         </div>
       )}
 
-      <div className="flex items-center gap-2 mb-6">
-        <div className="flex border-b flex-1">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="flex flex-1 overflow-x-auto border-b">
           {tabs.map(({ key, label, count, activeClass }) => (
             <button
               key={key}
               onClick={() => setTab(key)}
               className={cn(
-                "flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 -mb-px transition-colors",
+                "flex shrink-0 items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors sm:px-5",
                 tab === key ? activeClass : "border-transparent text-muted-foreground hover:text-foreground"
               )}
             >
@@ -197,7 +197,7 @@ export function KanbanBoard({
               <List className="h-3.5 w-3.5" />
             </button>
           </div>
-          <Button size="sm" className="gap-1.5" onClick={() => setCreateOpen(true)}>
+          <Button size="sm" className="flex-1 gap-1.5 sm:flex-none" onClick={() => setCreateOpen(true)}>
             <Plus className="h-3.5 w-3.5" />
             Nouvelle tache
           </Button>

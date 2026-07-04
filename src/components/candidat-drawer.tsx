@@ -78,7 +78,7 @@ export function CandidatDrawer({ open, onOpenChange, onCreated, cursus }: Candid
         </SheetHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col flex-1 min-h-0">
           <SheetBody>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="firstName">Prénom</Label>
                 <Input id="firstName" {...register("firstName")} autoFocus />

@@ -5,6 +5,7 @@ import { candidateExperiences, activityEvents } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
+import { can, type AppRole } from "@/lib/permissions";
 
 export type ExperienceInput = {
   jobTitle: string;
@@ -36,6 +37,7 @@ export async function addExperience(
 ): Promise<{ success: boolean; data?: ExperienceRow; error?: string }> {
   const user = await getCurrentUser();
   if (!user) return { success: false, error: "Non authentifié" };
+  if (!can(user.role as AppRole, "candidates:edit")) return { success: false, error: "Non autorisé" };
 
   const [row] = await db
     .insert(candidateExperiences)
@@ -79,6 +81,7 @@ export async function updateExperience(
 ): Promise<{ success: boolean; data?: ExperienceRow; error?: string }> {
   const user = await getCurrentUser();
   if (!user) return { success: false, error: "Non authentifié" };
+  if (!can(user.role as AppRole, "candidates:edit")) return { success: false, error: "Non autorisé" };
 
   const [row] = await db
     .update(candidateExperiences)
@@ -114,6 +117,7 @@ export async function deleteExperience(
 ): Promise<{ success: boolean; error?: string }> {
   const user = await getCurrentUser();
   if (!user) return { success: false, error: "Non authentifié" };
+  if (!can(user.role as AppRole, "candidates:edit")) return { success: false, error: "Non autorisé" };
 
   await db.delete(candidateExperiences).where(eq(candidateExperiences.id, id));
   revalidatePath(`/candidats/${candidateId}`);

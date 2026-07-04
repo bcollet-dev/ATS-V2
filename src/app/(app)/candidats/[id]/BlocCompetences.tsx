@@ -12,10 +12,12 @@ export function BlocCompetences({
   candidateId,
   initialSkills,
   embedded,
+  canEdit = true,
 }: {
   candidateId: string;
   initialSkills: Skill[];
   embedded?: boolean;
+  canEdit?: boolean;
 }) {
   const [skills, setSkills] = useState<Skill[]>(initialSkills);
   const [inputValue, setInputValue] = useState("");
@@ -91,26 +93,30 @@ export function BlocCompetences({
               className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-3 py-1 text-sm text-primary"
             >
               {skill.name}
-              <button
-                type="button"
-                onClick={() => handleDelete(skill)}
-                className="ml-0.5 text-primary/50 hover:text-primary transition-colors"
-                aria-label={`Supprimer ${skill.name}`}
-              >
-                <X className="h-3 w-3" />
-              </button>
+              {canEdit && (
+                <button
+                  type="button"
+                  onClick={() => handleDelete(skill)}
+                  className="ml-0.5 text-primary/50 hover:text-primary transition-colors"
+                  aria-label={`Supprimer ${skill.name}`}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
             </span>
           ))}
-          <Input
-            ref={inputRef}
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onBlur={() => { if (inputValue.trim()) submitTag(); }}
-            placeholder="Ajouter…"
-            disabled={isAdding}
-            className="h-8 w-40 text-sm rounded-full border-dashed"
-          />
+          {canEdit && (
+            <Input
+              ref={inputRef}
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+              onBlur={() => { if (inputValue.trim()) submitTag(); }}
+              placeholder="Ajouter…"
+              disabled={isAdding}
+              className="h-8 w-40 text-sm rounded-full border-dashed"
+            />
+          )}
         </div>
         <p className="text-xs text-muted-foreground mt-3">Entrée ou virgule pour valider</p>
       </div>

@@ -4,9 +4,16 @@ import { tasks, profiles } from "@/db/schema";
 import { eq, isNull, and, asc } from "drizzle-orm";
 import { sendDailyDigest } from "@/lib/email";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(request: NextRequest) {
+  const cronSecret = process.env.CRON_SECRET?.trim();
+  if (!cronSecret) {
+    return NextResponse.json({ error: "Cron non configure" }, { status: 503 });
+  }
+
   const auth = request.headers.get("authorization");
-  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (auth !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

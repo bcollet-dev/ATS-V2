@@ -95,7 +95,7 @@ export function BlocRepresentantLegal({
       </div>
 
       {!isEditing ? (
-        <dl className="px-5 py-4 grid grid-cols-2 gap-x-8 gap-y-4 sm:grid-cols-3">
+        <dl className="grid grid-cols-1 gap-x-8 gap-y-4 px-4 py-4 sm:grid-cols-2 sm:px-5 lg:grid-cols-3">
           <Field label="Prénom" value={data.legalRepFirstName} />
           <Field label="Nom" value={data.legalRepLastName} />
           <Field label="Lien" value={data.legalRepLink} />
@@ -104,7 +104,7 @@ export function BlocRepresentantLegal({
         </dl>
       ) : (
         <form onSubmit={handleSubmit(onSubmit)} className="px-5 py-4 space-y-4">
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="space-y-1.5">
               <Label htmlFor="legalRepFirstName">Prénom</Label>
               <Input id="legalRepFirstName" {...register("legalRepFirstName")} />
@@ -129,7 +129,7 @@ export function BlocRepresentantLegal({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="legalRepPhone">Téléphone</Label>
               <Input id="legalRepPhone" type="tel" {...register("legalRepPhone")} />

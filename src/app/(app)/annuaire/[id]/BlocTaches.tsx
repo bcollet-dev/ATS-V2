@@ -265,7 +265,7 @@ export function BlocTaches({
                 <Label htmlFor="tk-title">Titre *</Label>
                 <Input id="tk-title" {...register("title", { required: true })} placeholder="Ex : Appeler le RH" />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label htmlFor="tk-category">Catégorie *</Label>
                   <Controller name="category" control={control} render={({ field }) => (

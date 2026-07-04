@@ -40,8 +40,8 @@ function ModalContent({
       />
       <Dialog.Popup
         className={cn(
-          "fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2",
-          "rounded-lg bg-background shadow-xl flex flex-col max-h-[90vh]",
+          "fixed left-1/2 top-1/2 z-50 w-[calc(100vw-1rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 sm:w-full",
+          "max-h-[calc(100dvh-1rem)] rounded-lg bg-background shadow-xl flex flex-col sm:max-h-[90vh]",
           "data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95",
           "data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           "duration-200",
@@ -57,7 +57,7 @@ function ModalContent({
 function ModalHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
-      className={cn("flex items-center justify-between border-b px-6 py-4 shrink-0", className)}
+      className={cn("flex items-center justify-between border-b px-4 py-4 shrink-0 sm:px-6", className)}
       {...props}
     />
   );
@@ -85,14 +85,14 @@ function ModalClose({ className }: { className?: string }) {
 
 function ModalBody({ className, ...props }: React.ComponentProps<"div">) {
   return (
-    <div className={cn("overflow-y-auto px-6 py-5 space-y-4", className)} {...props} />
+    <div className={cn("overflow-y-auto px-4 py-5 space-y-4 sm:px-6", className)} {...props} />
   );
 }
 
 function ModalFooter({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
-      className={cn("flex items-center justify-end gap-2 border-t px-6 py-4 shrink-0", className)}
+      className={cn("flex flex-wrap items-center justify-end gap-2 border-t px-4 py-4 shrink-0 sm:px-6", className)}
       {...props}
     />
   );

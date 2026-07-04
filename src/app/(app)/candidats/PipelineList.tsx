@@ -411,6 +411,130 @@ function SortHeader({ col, label, sort, onSort }: {
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
+function CandidateMobileCard({
+  candidate,
+  onStatusChange,
+  archived,
+  profiles,
+  cursus,
+  onDeleted,
+}: {
+  candidate: CandidatRow;
+  onStatusChange: (id: string, status: string) => void;
+  archived: boolean;
+  profiles: { id: string; fullName: string }[];
+  cursus: { id: string; name: string }[];
+  onDeleted: () => void;
+}) {
+  const nextDate = formatDate(candidate.nextTaskAt);
+
+  return (
+    <article className="space-y-3 rounded-lg border bg-card p-3 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <Link
+            href={`/candidats/${candidate.id}`}
+            className="block truncate text-base font-semibold hover:text-primary"
+          >
+            {candidate.firstName} {candidate.lastName}
+          </Link>
+          {candidate.cursusEnvisage && (
+            <p className="mt-0.5 truncate text-sm text-muted-foreground">{candidate.cursusEnvisage}</p>
+          )}
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          <StatusCell candidate={candidate} onStatusChange={onStatusChange} />
+          {!archived ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                id={`candidate-card-active-menu-${candidate.id}`}
+                className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent side="bottom" align="end">
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel>Archiver</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={() => onStatusChange(candidate.id, "temporary_refusal")}>Refus temporaire</DropdownMenuItem>
+                  <DropdownMenuItem variant="destructive" onClick={() => onStatusChange(candidate.id, "definitive_refusal")}>Refus definitif</DropdownMenuItem>
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <div className="flex items-center gap-1">
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  id={`candidate-card-archived-menu-${candidate.id}`}
+                  className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent side="bottom" align="end">
+                  <DropdownMenuGroup>
+                    <DropdownMenuLabel>Remettre dans pipeline</DropdownMenuLabel>
+                    <DropdownMenuItem onClick={() => onStatusChange(candidate.id, "to_call")}>A appeler</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onStatusChange(candidate.id, "in_progress")}>En cours</DropdownMenuItem>
+                  </DropdownMenuGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <PermanentDeleteEntityButton
+                entityType="candidate"
+                entityId={candidate.id}
+                label={`${candidate.firstName} ${candidate.lastName}`}
+                iconOnly
+                onDeleted={onDeleted}
+              />
+            </div>
+          )}
+        </div>
+      </div>
+
+      {candidate.needMatchings.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {candidate.needMatchings.slice(0, 3).map((matching) => (
+            <Link
+              key={matching.matchingId}
+              href={`/besoins/${matching.needId}`}
+              className={cn(
+                "inline-flex max-w-full items-center gap-1 rounded-full px-2 py-1 text-[11px]",
+                PROP_CHIP[matching.propositionStatus] ?? "bg-muted text-muted-foreground"
+              )}
+            >
+              <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", PROP_DOT[matching.propositionStatus] ?? "bg-gray-400")} />
+              <span className="truncate">{matching.needTitle}</span>
+              <span className="shrink-0">- {PROP_SHORT[matching.propositionStatus] ?? matching.propositionStatus}</span>
+            </Link>
+          ))}
+          {candidate.needMatchings.length > 3 && (
+            <span className="self-center text-[11px] text-muted-foreground">+{candidate.needMatchings.length - 3}</span>
+          )}
+        </div>
+      )}
+
+      <dl className="grid grid-cols-2 gap-3 text-xs">
+        <div className="min-w-0">
+          <dt className="text-muted-foreground">Cursus</dt>
+          <dd className="mt-1 min-w-0">
+            <CursusCell candidate={candidate} cursus={cursus} />
+          </dd>
+        </div>
+        <div className="min-w-0">
+          <dt className="text-muted-foreground">Recruteur</dt>
+          <dd className="mt-1 min-w-0">
+            <OwnerCell candidate={candidate} profiles={profiles} />
+          </dd>
+        </div>
+        <div className="min-w-0">
+          <dt className="text-muted-foreground">Prochaine tache</dt>
+          <dd className={cn("mt-1 text-sm", candidate.nextTaskOverdue ? "font-medium text-destructive" : "text-muted-foreground")}>
+            {nextDate ?? "-"}
+          </dd>
+        </div>
+      </dl>
+    </article>
+  );
+}
+
 export function PipelineList({
   candidates,
   onStatusChange,
@@ -464,11 +588,11 @@ export function PipelineList({
   const activeFilterCount = [...filters.values()].filter((s) => s !== null).length;
 
   if (candidates.length === 0) {
-    return <div className="px-6 py-16 text-center"><p className="text-sm text-muted-foreground">Aucun candidat</p></div>;
+    return <div className="px-4 py-16 text-center sm:px-6"><p className="text-sm text-muted-foreground">Aucun candidat</p></div>;
   }
 
   return (
-    <div className="px-6 py-4 space-y-2">
+    <div className="space-y-3 px-4 py-4 sm:px-6">
       {activeFilterCount > 0 && (
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground">{processed.length} / {candidates.length} candidat{candidates.length !== 1 ? "s" : ""}</span>
@@ -476,8 +600,28 @@ export function PipelineList({
         </div>
       )}
 
-      <div className="rounded-lg border overflow-visible">
-        <table className="w-full text-sm">
+      <div className="space-y-3 md:hidden">
+        {processed.length === 0 ? (
+          <div className="rounded-lg border border-dashed px-4 py-10 text-center text-xs text-muted-foreground">
+            Aucun candidat correspondant aux filtres
+          </div>
+        ) : (
+          processed.map((candidate) => (
+            <CandidateMobileCard
+              key={candidate.id}
+              candidate={candidate}
+              onStatusChange={onStatusChange}
+              archived={archived}
+              profiles={profiles}
+              cursus={cursus}
+              onDeleted={() => router.refresh()}
+            />
+          ))
+        )}
+      </div>
+
+      <div className="hidden rounded-lg border md:block md:overflow-x-auto">
+        <table className="w-full min-w-[900px] text-sm">
           <thead className="bg-muted/40 border-b">
             <tr>
               <SortHeader col="name"     label="Candidat"        sort={sort} onSort={(k, d) => setSort({ key: k, dir: d })} />
@@ -509,12 +653,12 @@ export function PipelineList({
                       <span className="text-xs text-muted-foreground/40">—</span>
                     ) : (
                       <div className="flex flex-wrap gap-1">
-                        {c.needMatchings.slice(0, 3).map((m, i) => (
-                          <span key={i} className={cn("inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full", PROP_CHIP[m.propositionStatus] ?? "bg-muted text-muted-foreground")}>
+                        {c.needMatchings.slice(0, 3).map((m) => (
+                          <Link key={m.matchingId} href={`/besoins/${m.needId}`} className={cn("inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full hover:ring-1 hover:ring-primary/30 transition", PROP_CHIP[m.propositionStatus] ?? "bg-muted text-muted-foreground")}>
                             <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", PROP_DOT[m.propositionStatus] ?? "bg-gray-400")} />
                             <span className="truncate max-w-[80px]">{m.needTitle}</span>
-                            · {PROP_SHORT[m.propositionStatus] ?? m.propositionStatus}
-                          </span>
+                            <span className="shrink-0">· {PROP_SHORT[m.propositionStatus] ?? m.propositionStatus}</span>
+                          </Link>
                         ))}
                         {c.needMatchings.length > 3 && (
                           <span className="text-[10px] text-muted-foreground self-center">+{c.needMatchings.length - 3}</span>
@@ -534,7 +678,10 @@ export function PipelineList({
                   <td className="px-4 py-2.5">
                     {!archived && (
                       <DropdownMenu>
-                        <DropdownMenuTrigger className="h-7 w-7 rounded flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
+                        <DropdownMenuTrigger
+                          id={`candidate-list-active-menu-${c.id}`}
+                          className="h-7 w-7 rounded flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                        >
                           <MoreHorizontal className="h-4 w-4" />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent side="bottom" align="end">
@@ -549,7 +696,10 @@ export function PipelineList({
                     {archived && (
                       <div className="flex items-center gap-1">
                         <DropdownMenu>
-                          <DropdownMenuTrigger className="h-7 w-7 rounded flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
+                          <DropdownMenuTrigger
+                            id={`candidate-list-archived-menu-${c.id}`}
+                            className="h-7 w-7 rounded flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                          >
                             <MoreHorizontal className="h-4 w-4" />
                           </DropdownMenuTrigger>
                           <DropdownMenuContent side="bottom" align="end">

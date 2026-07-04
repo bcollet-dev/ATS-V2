@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useOptimistic } from "react";
+import { useEffect, useState, useTransition, useOptimistic } from "react";
 import { useRouter } from "next/navigation";
 import { LayoutGrid, List, Plus, Archive, Users, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { CandidatDrawer } from "@/components/candidat-drawer";
 import { updateCandidateStatus, type CandidatRow } from "./actions";
 import { permanentlyDeleteCandidate } from "@/app/(app)/candidats/[id]/actions";
-import { deleteAllMatchingsForCandidate, markMatchingWinner, updateMatchingStatus } from "@/app/(app)/matching/actions";
+import { deleteAllMatchingsForCandidate, updateMatchingStatus } from "@/app/(app)/matching/actions";
 import { updateNeedStatus } from "@/app/(app)/besoins/actions";
 import { KanbanPipeline } from "./KanbanPipeline";
 import { PipelineList } from "./PipelineList";
@@ -403,6 +403,12 @@ export function PipelineClient({
       state.map((c) => (c.id === id ? { ...c, status } : c))
   );
 
+  useEffect(() => {
+    if (window.matchMedia("(max-width: 767px)").matches) {
+      setView("list");
+    }
+  }, []);
+
   const pipeline = candidates.filter((c) => !ARCHIVED.has(c.status));
   const archives = candidates.filter((c) => ARCHIVED.has(c.status));
 
@@ -596,40 +602,52 @@ export function PipelineClient({
     });
   }
 
-  function handleYpareoConfirm(draft: YpareoPlacementDraft, selectedClassId: string | null) {
+  async function handleYpareoConfirm(draft: YpareoPlacementDraft, selectedClassId: string | null) {
     if (!pendingYpareo) return;
     const { id } = pendingYpareo;
-    setPendingYpareo(null);
-    pushYpareoPlacement(draft, selectedClassId).then((result) => {
-      if (!result.success) toast.error(result.error ?? "Erreur lors de l'envoi sur Ypareo");
-    }).catch(() => {
+    try {
+      const result = await pushYpareoPlacement(draft, selectedClassId);
+      if (!result.success) {
+        toast.error(result.error ?? "Erreur lors de l'envoi sur Ypareo");
+        startTransition(() => {
+          setOptimistic({ id, status: "waiting_fre" });
+          router.refresh();
+        });
+        return;
+      }
+      toast.success("Envoi Ypareo confirme");
+      setPendingYpareo(null);
+      startTransition(() => {
+        setOptimistic({ id, status: "placed" });
+        router.refresh();
+      });
+    } catch {
       toast.error("Erreur lors de l'envoi sur Ypareo");
-    });
-    startTransition(async () => {
-      setOptimistic({ id, status: "placed" });
-      if (draft.matchingId) await markMatchingWinner(draft.matchingId);
-      await updateCandidateStatus(id, "placed");
-    });
+      startTransition(() => {
+        setOptimistic({ id, status: "waiting_fre" });
+        router.refresh();
+      });
+    }
   }
 
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="px-6 pt-6 pb-0 flex items-center gap-3">
-        <div className="flex-1">
-          <h1 className="text-2xl font-semibold">Candidats</h1>
+      <div className="flex flex-col gap-3 px-4 pt-4 pb-0 sm:flex-row sm:items-center sm:px-6 sm:pt-6">
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate text-2xl font-semibold">Candidats</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             {pipeline.length} actif{pipeline.length !== 1 ? "s" : ""} · {archives.length} archivé{archives.length !== 1 ? "s" : ""}
           </p>
         </div>
-        <Button size="sm" className="gap-1.5" onClick={() => setDrawerOpen(true)}>
+        <Button size="sm" className="w-full gap-1.5 sm:w-auto" onClick={() => setDrawerOpen(true)}>
           <Plus className="h-3.5 w-3.5" />
           Nouveau candidat
         </Button>
       </div>
 
       {/* Tabs + view toggle */}
-      <div className="px-6 mt-4 flex items-center border-b">
+      <div className="mt-3 flex flex-wrap items-end gap-y-2 border-b px-4 sm:mt-4 sm:px-6">
         <button
           onClick={() => setTab("pipeline")}
           className={cn(

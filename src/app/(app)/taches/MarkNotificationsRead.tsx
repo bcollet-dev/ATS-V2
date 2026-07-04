@@ -3,9 +3,9 @@
 import { useEffect } from "react";
 import { markNotificationsRead } from "../candidats/[id]/task-actions";
 
-export function MarkNotificationsRead({ userId }: { userId: string }) {
+export function MarkNotificationsRead() {
   useEffect(() => {
-    markNotificationsRead(userId);
-  }, [userId]);
+    markNotificationsRead();
+  }, []);
   return null;
 }

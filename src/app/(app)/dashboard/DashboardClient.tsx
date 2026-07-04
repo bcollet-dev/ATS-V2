@@ -48,14 +48,26 @@ export function DashboardClient({ initialWidgets, role }: Props) {
   const canToggleScope = role === "team_leader";
   const forcePersonal = role === "admissions" || role === "relations_entreprises";
 
-  const layouts = {
-    lg: widgets.map((w) => ({
+  const desktopLayout = widgets.map((w) => ({
       i: w.id,
       x: w.posX,
       y: w.posY,
       w: w.width,
       h: w.height,
       minW: 3,
+      minH: 2,
+    }));
+  const layouts = {
+    lg: desktopLayout,
+    md: desktopLayout.map((item) => ({ ...item, w: Math.min(item.w, 10) })),
+    sm: desktopLayout.map((item) => ({ ...item, w: Math.min(item.w, 6) })),
+    xs: widgets.map((w, index) => ({
+      i: w.id,
+      x: 0,
+      y: index * Math.max(w.height, 3),
+      w: 1,
+      h: Math.max(w.height, 3),
+      minW: 1,
       minH: 2,
     })),
   };
@@ -111,15 +123,15 @@ export function DashboardClient({ initialWidgets, role }: Props) {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="px-6 pt-6 pb-4 flex items-center gap-3 shrink-0">
-        <h1 className="text-2xl font-semibold flex-1">Dashboard</h1>
+      <div className="flex shrink-0 flex-col gap-3 px-4 pt-4 pb-4 sm:flex-row sm:flex-wrap sm:items-center sm:px-6 sm:pt-6">
+        <h1 className="text-2xl font-semibold sm:flex-1">Dashboard</h1>
 
         {canToggleScope && (
-          <div className="flex items-center gap-1 rounded-lg border p-1 bg-muted/40">
+          <div className="flex w-full items-center gap-1 rounded-lg border bg-muted/40 p-1 sm:w-auto">
             <button
               onClick={() => setScope("global")}
               className={cn(
-                "flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium transition-colors",
+                "flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium transition-colors sm:flex-none",
                 scope === "global"
                   ? "bg-background shadow-sm text-foreground"
                   : "text-muted-foreground hover:text-foreground"
@@ -131,7 +143,7 @@ export function DashboardClient({ initialWidgets, role }: Props) {
             <button
               onClick={() => setScope("personal")}
               className={cn(
-                "flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium transition-colors",
+                "flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium transition-colors sm:flex-none",
                 scope === "personal"
                   ? "bg-background shadow-sm text-foreground"
                   : "text-muted-foreground hover:text-foreground"
@@ -166,7 +178,7 @@ export function DashboardClient({ initialWidgets, role }: Props) {
           <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
         </div>
 
-        <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setLibraryOpen(true)}>
+        <Button size="sm" variant="outline" className="w-full gap-1.5 sm:w-auto" onClick={() => setLibraryOpen(true)}>
           <Plus className="h-3.5 w-3.5" />
           Ajouter un widget
         </Button>
@@ -174,7 +186,7 @@ export function DashboardClient({ initialWidgets, role }: Props) {
         <Button
           size="sm"
           variant={editMode ? "default" : "outline"}
-          className="gap-1.5"
+          className="w-full gap-1.5 sm:w-auto"
           onClick={() => setEditMode((p) => !p)}
         >
           {editMode ? (
@@ -186,7 +198,7 @@ export function DashboardClient({ initialWidgets, role }: Props) {
       </div>
 
       {editMode && (
-        <div className="px-6 pb-3 shrink-0">
+        <div className="px-4 pb-3 shrink-0 sm:px-6">
           <p className="text-xs text-muted-foreground bg-muted/60 rounded-md px-3 py-2">
             Mode édition — déplacez et redimensionnez les widgets, cliquez ✕ pour en supprimer.
           </p>
@@ -194,7 +206,7 @@ export function DashboardClient({ initialWidgets, role }: Props) {
       )}
 
       {/* Grid */}
-      <div className="flex-1 overflow-auto px-6 pb-6">
+      <div className="flex-1 overflow-auto px-2 pb-6 sm:px-6">
         {widgets.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-center">
             <p className="text-muted-foreground mb-4">Votre dashboard est vide.</p>
@@ -207,8 +219,8 @@ export function DashboardClient({ initialWidgets, role }: Props) {
           <ResponsiveGridLayout
             className="layout"
             layouts={layouts}
-            breakpoints={{ lg: 1200, md: 996, sm: 768 }}
-            cols={{ lg: 12, md: 10, sm: 6 }}
+            breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 0 }}
+            cols={{ lg: 12, md: 10, sm: 6, xs: 1 }}
             rowHeight={80}
             margin={[12, 12]}
             isDraggable={editMode}

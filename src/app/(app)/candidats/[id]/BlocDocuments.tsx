@@ -115,7 +115,7 @@ function DocRow({
   isReplacing: boolean;
 }) {
   async function handleOpen() {
-    const url = await getSignedCandidateDocumentUrl(doc.storagePath);
+    const url = await getSignedCandidateDocumentUrl(doc.id);
     if (url) window.open(url, "_blank");
     else toast.error("Impossible d'ouvrir le document");
   }
@@ -268,7 +268,7 @@ export function BlocDocuments({
 
   function handleDelete(doc: CandidateDoc) {
     startTransition(async () => {
-      const result = await deleteCandidateDocument(doc.id, candidateId, doc.storagePath);
+      const result = await deleteCandidateDocument(doc.id, candidateId);
       if (!result.success) { toast.error(result.error); return; }
       updateDocs(doc.documentType as DocType, doc, "remove");
       toast.success("Document supprimé");
@@ -299,7 +299,7 @@ export function BlocDocuments({
           <h2 className="text-sm font-semibold">Documents</h2>
         </div>
 
-        <div className="grid grid-cols-2 gap-px bg-border">
+        <div className="grid grid-cols-1 gap-px bg-border sm:grid-cols-2">
           {SECTIONS.map((section, idx) => {
             const isUploading = uploadingType === section.type;
             const isLastOdd = idx === SECTIONS.length - 1 && SECTIONS.length % 2 !== 0;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Loader2, FileText, User, Phone, Briefcase, GraduationCap, ShieldCheck, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,8 @@ type ReviewField = {
   key: string;
   label: string;
   value: string;
+  defaultChecked?: boolean;
+  sensitive?: boolean;
 };
 
 type ReviewGroup = {
@@ -133,7 +135,16 @@ function buildGroups(documentType: string, data: Record<string, unknown>): Revie
   }
 
   if (documentType === "carte_vitale") {
-    if (data.nir) {
+    const protectedData = data._protected && typeof data._protected === "object"
+      ? data._protected as Record<string, unknown>
+      : null;
+    const nirValue = typeof data.nir === "string"
+      ? data.nir
+      : typeof protectedData?.nirMasked === "string"
+        ? protectedData.nirMasked
+        : null;
+    if (nirValue) {
+      data.nir = nirValue;
       groups.push({
         id: "nir",
         label: "Sécurité sociale",
@@ -164,7 +175,16 @@ function buildGroups(documentType: string, data: Record<string, unknown>): Revie
     }
   }
 
-  return groups;
+  return groups.map((group) => group.id !== "nir"
+    ? group
+    : {
+        ...group,
+        fields: group.fields.map((field) => ({
+          ...field,
+          defaultChecked: false,
+          sensitive: true,
+        })),
+      });
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -193,10 +213,17 @@ export function ExtractionReviewSheet({
   onOpenChange: (open: boolean) => void;
   onApplied: () => void;
 }) {
-  const groups = buildGroups(documentType, extractedData);
-  const allKeys = groups.flatMap((g) => g.fields.map((f) => f.key));
-  const [checked, setChecked] = useState<Set<string>>(() => new Set(allKeys));
+  const groups = useMemo(() => buildGroups(documentType, extractedData), [documentType, extractedData]);
+  const defaultKeys = useMemo(
+    () => groups.flatMap((g) => g.fields.filter((f) => f.defaultChecked !== false).map((f) => f.key)),
+    [groups],
+  );
+  const [checked, setChecked] = useState<Set<string>>(() => new Set(defaultKeys));
   const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    setChecked(new Set(defaultKeys));
+  }, [defaultKeys, documentId, open]);
 
   function toggleKey(key: string) {
     setChecked((prev) => {
@@ -303,7 +330,10 @@ export function ExtractionReviewSheet({
                           {field.value ? (
                             <>
                               <p className="text-sm font-medium truncate">{field.label}</p>
-                              <p className="text-xs text-muted-foreground">{field.value}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {field.value}
+                                {field.sensitive ? " - masque par defaut" : ""}
+                              </p>
                             </>
                           ) : (
                             <p className="text-sm">{field.label}</p>

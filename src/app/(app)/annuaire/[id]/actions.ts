@@ -1,6 +1,7 @@
 "use server";
 
 import { requireAuth } from "@/lib/auth";
+import { can, type AppRole } from "@/lib/permissions";
 import { db } from "@/db";
 import {
   companies, companyContacts, needs, matchings, candidates, activityEvents, profiles,
@@ -233,7 +234,7 @@ export async function updateCompanyInfo(
   }
 ): Promise<{ success: boolean; error?: string }> {
   const actor = await requireAuth();
-  if (actor.role === "direction") return { success: false, error: "Non autorisé" };
+  if (!can(actor.role as AppRole, "companies:edit")) return { success: false, error: "Non autorisé" };
   await db.update(companies).set({ ...data, updatedAt: new Date() }).where(eq(companies.id, id));
   await db.insert(activityEvents).values({
     actorId: actor.id,
@@ -259,7 +260,7 @@ export async function updateCompanyFRE(
   }
 ): Promise<{ success: boolean; error?: string }> {
   const actor = await requireAuth();
-  if (actor.role === "direction") return { success: false, error: "Non autorisé" };
+  if (!can(actor.role as AppRole, "companies:edit")) return { success: false, error: "Non autorisé" };
   await db.update(companies).set({ ...data, updatedAt: new Date() }).where(eq(companies.id, id));
   await db.insert(activityEvents).values({
     actorId: actor.id,
@@ -276,7 +277,7 @@ export async function updateCompanyOwner(
   ownerId: string | null
 ): Promise<{ success: boolean; error?: string }> {
   const actor = await requireAuth();
-  if (actor.role === "direction") return { success: false, error: "Non autorisé" };
+  if (!can(actor.role as AppRole, "companies:edit")) return { success: false, error: "Non autorisé" };
   await db
     .update(companies)
     .set({ ownerId: ownerId || null, updatedAt: new Date() })
@@ -295,7 +296,7 @@ export async function syncFromPappers(
   companyId: string
 ): Promise<{ success: boolean; error?: string }> {
   const actor = await requireAuth();
-  if (actor.role === "direction") return { success: false, error: "Non autorisé" };
+  if (!can(actor.role as AppRole, "companies:edit")) return { success: false, error: "Non autorisé" };
 
   const [row] = await db
     .select({ siret: companies.siret })
@@ -337,7 +338,7 @@ export async function archiveCompany(
   companyId: string
 ): Promise<{ success: boolean; error?: string }> {
   const actor = await requireAuth();
-  if (actor.role === "direction") return { success: false, error: "Non autorisé" };
+  if (!can(actor.role as AppRole, "companies:delete")) return { success: false, error: "Non autorisé" };
 
   await db
     .update(companies)
@@ -366,7 +367,7 @@ export async function addContact(
   data: ContactInput
 ): Promise<{ success: true; id: string } | { success: false; error: string }> {
   const actor = await requireAuth();
-  if (actor.role === "direction") return { success: false, error: "Non autorisé" };
+  if (!can(actor.role as AppRole, "companies:edit")) return { success: false, error: "Non autorisé" };
 
   if (data.isPrimary) {
     await db
@@ -406,7 +407,7 @@ export async function updateContact(
   data: ContactInput
 ): Promise<{ success: boolean; error?: string }> {
   const actor = await requireAuth();
-  if (actor.role === "direction") return { success: false, error: "Non autorisé" };
+  if (!can(actor.role as AppRole, "companies:edit")) return { success: false, error: "Non autorisé" };
 
   if (data.isPrimary) {
     await db
@@ -441,7 +442,7 @@ export async function updateContact(
 
 export async function deleteContact(contactId: string, companyId: string): Promise<void> {
   const actor = await requireAuth();
-  if (actor.role === "direction") return;
+  if (!can(actor.role as AppRole, "companies:edit")) return;
 
   const [contact] = await db
     .select({ firstName: companyContacts.firstName, lastName: companyContacts.lastName })

@@ -2,10 +2,10 @@
 
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/db";
-import { documents, activityEvents } from "@/db/schema";
-import { eq, and, asc } from "drizzle-orm";
+import { documents, activityEvents, companies } from "@/db/schema";
+import { eq, and, asc, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { createStorageClient } from "@/lib/supabase/server";
 
 const MAX_SIZE = 20 * 1024 * 1024; // 20 Mo
 const ALLOWED_MIME_TYPES = new Set([
@@ -30,7 +30,6 @@ function getExtension(mime: string): string {
 export type CompanyDocument = {
   id: string;
   fileName: string;
-  storagePath: string;
   mimeType: string;
   fileSize: number;
   createdAt: string;
@@ -42,7 +41,6 @@ export async function listCompanyDocuments(companyId: string): Promise<CompanyDo
     .select({
       id: documents.id,
       fileName: documents.fileName,
-      storagePath: documents.storagePath,
       mimeType: documents.mimeType,
       fileSize: documents.fileSize,
       createdAt: documents.createdAt,
@@ -59,7 +57,6 @@ export async function uploadCompanyDocument(
   formData: FormData
 ): Promise<{ success: true; document: CompanyDocument } | { success: false; error: string }> {
   const actor = await requireAuth();
-  if (actor.role === "direction") return { success: false, error: "Non autorisé" };
 
   const file = formData.get("file") as File | null;
   if (!file || file.size === 0) return { success: false, error: "Aucun fichier sélectionné" };
@@ -72,7 +69,7 @@ export async function uploadCompanyDocument(
   const uid = crypto.randomUUID();
   const storagePath = `companies/${companyId}/${uid}.${ext}`;
 
-  const supabase = await createClient();
+  const supabase = await createStorageClient();
   const bytes = await file.arrayBuffer();
   const { error: uploadError } = await supabase.storage
     .from("documents")
@@ -94,7 +91,6 @@ export async function uploadCompanyDocument(
     .returning({
       id: documents.id,
       fileName: documents.fileName,
-      storagePath: documents.storagePath,
       mimeType: documents.mimeType,
       fileSize: documents.fileSize,
       createdAt: documents.createdAt,
@@ -116,25 +112,49 @@ export async function uploadCompanyDocument(
 
 export async function deleteCompanyDocument(
   documentId: string,
-  companyId: string,
-  storagePath: string
+  companyId: string
 ): Promise<{ success: boolean; error?: string }> {
-  const actor = await requireAuth();
-  if (actor.role === "direction") return { success: false, error: "Non autorisé" };
+  await requireAuth();
 
-  const supabase = await createClient();
-  await supabase.storage.from("documents").remove([storagePath]);
+  const [row] = await db
+    .select({ storagePath: documents.storagePath })
+    .from(documents)
+    .innerJoin(companies, eq(documents.companyId, companies.id))
+    .where(
+      and(
+        eq(documents.id, documentId),
+        eq(documents.companyId, companyId),
+        isNull(companies.deletedAt)
+      )
+    )
+    .limit(1);
+  if (!row) return { success: false, error: "Document introuvable" };
+
+  const supabase = await createStorageClient();
+  const { error: removeError } = await supabase.storage.from("documents").remove([row.storagePath]);
+  if (removeError) {
+    return { success: false, error: `Erreur suppression fichier : ${removeError.message}` };
+  }
   await db.delete(documents).where(and(eq(documents.id, documentId), eq(documents.companyId, companyId)));
 
   revalidatePath(`/annuaire/${companyId}`);
   return { success: true };
 }
 
-export async function getSignedDocumentUrl(storagePath: string): Promise<string | null> {
+export async function getSignedDocumentUrl(documentId: string): Promise<string | null> {
   await requireAuth();
-  const supabase = await createClient();
+  const [row] = await db
+    .select({ storagePath: documents.storagePath })
+    .from(documents)
+    .innerJoin(companies, eq(documents.companyId, companies.id))
+    .where(and(eq(documents.id, documentId), isNull(companies.deletedAt)))
+    .limit(1);
+
+  if (!row) return null;
+
+  const supabase = await createStorageClient();
   const { data } = await supabase.storage
     .from("documents")
-    .createSignedUrl(storagePath, 60 * 60);
+    .createSignedUrl(row.storagePath, 60 * 60);
   return data?.signedUrl ?? null;
 }

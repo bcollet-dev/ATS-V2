@@ -61,10 +61,12 @@ export function BlocIdentite({
   candidateId,
   data,
   canRevealNir,
+  canEdit = true,
 }: {
   candidateId: string;
   data: IdentiteData;
   canRevealNir: boolean;
+  canEdit?: boolean;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [nirVisible, setNirVisible] = useState<string | null>(null);
@@ -140,7 +142,7 @@ export function BlocIdentite({
     <section className="rounded-lg border bg-card">
       <div className="flex items-center justify-between px-5 py-3.5 border-b">
         <h2 className="text-sm font-semibold">Identité</h2>
-        {!isEditing && (
+        {!isEditing && canEdit && (
           <Button variant="ghost" size="sm" className="gap-1.5 h-7 text-xs" onClick={() => setIsEditing(true)}>
             <Pencil className="h-3.5 w-3.5" />
             Modifier
@@ -149,7 +151,7 @@ export function BlocIdentite({
       </div>
 
       {!isEditing ? (
-        <dl className="px-5 py-4 grid grid-cols-2 gap-x-8 gap-y-4 sm:grid-cols-3">
+        <dl className="grid grid-cols-1 gap-x-8 gap-y-4 px-4 py-4 sm:grid-cols-2 sm:px-5 lg:grid-cols-3">
           <Field label="Civilité" value={data.title} />
           <Field label="Prénom" value={data.firstName} />
           <Field label="Nom d'usage" value={data.lastName} />
@@ -213,7 +215,7 @@ export function BlocIdentite({
       ) : (
         <form onSubmit={handleSubmit(onSubmit)} className="px-5 py-4 space-y-4">
           {/* État civil */}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="space-y-1.5">
               <Label htmlFor="title">Civilité</Label>
               <Controller
@@ -238,7 +240,7 @@ export function BlocIdentite({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="birthName">Nom de naissance</Label>
               <Input id="birthName" {...register("birthName")} />
@@ -249,7 +251,7 @@ export function BlocIdentite({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>Commune de naissance</Label>
               <Controller
@@ -280,7 +282,7 @@ export function BlocIdentite({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>Pays de naissance</Label>
               <Controller
@@ -335,7 +337,7 @@ export function BlocIdentite({
               <Label htmlFor="addressLine2">Complément</Label>
               <Input id="addressLine2" {...register("addressLine2")} placeholder="Appartement, bâtiment…" />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="postalCode">Code postal</Label>
                 <Input id="postalCode" {...register("postalCode")} />
@@ -351,7 +353,7 @@ export function BlocIdentite({
           <div className="border-t pt-4 space-y-4">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Représentant légal (si mineur)</p>
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div className="space-y-1.5">
                 <Label htmlFor="legalRepFirstName">Prénom</Label>
                 <Input id="legalRepFirstName" {...register("legalRepFirstName")} />
@@ -376,7 +378,7 @@ export function BlocIdentite({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="legalRepPhone">Téléphone</Label>
                 <Input id="legalRepPhone" type="tel" {...register("legalRepPhone")} />

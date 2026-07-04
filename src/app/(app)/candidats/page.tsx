@@ -1,4 +1,3 @@
-import { requireAuth } from "@/lib/auth";
 import { db } from "@/db";
 import { profiles } from "@/db/schema";
 import { eq, isNull, and, asc } from "drizzle-orm";
@@ -7,8 +6,7 @@ import { loadPipelineCandidates } from "./actions";
 import { PipelineClient } from "./PipelineClient";
 
 export default async function CandidatsPage() {
-  const [, candidates, cursus, activeProfiles] = await Promise.all([
-    requireAuth(),
+  const [candidates, cursus, activeProfiles] = await Promise.all([
     loadPipelineCandidates(),
     getActiveCursus(),
     db

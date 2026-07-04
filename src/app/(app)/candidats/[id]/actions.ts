@@ -5,8 +5,10 @@ import { candidates, activityEvents, documents, taskLinks } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
+import { can, type AppRole } from "@/lib/permissions";
 import { encryptNir, decryptNir } from "@/lib/nir";
-import { createClient } from "@/lib/supabase/server";
+import { createStorageClient } from "@/lib/supabase/server";
+import { resolveFrenchBirthDepartment } from "@/lib/birth-department";
 
 export type CommuneResult = {
   nom: string;
@@ -70,6 +72,13 @@ export async function updateIdentite(
 ): Promise<{ success: boolean; error?: string }> {
   const user = await getCurrentUser();
   if (!user) return { success: false, error: "Non authentifié" };
+  if (!can(user.role as AppRole, "candidates:edit")) return { success: false, error: "Non autorisé" };
+
+  const birthDepartment = await resolveFrenchBirthDepartment({
+    currentDepartment: input.birthDepartment,
+    birthCity: input.birthCity,
+    birthCountry: input.birthCountry,
+  });
 
   await db.update(candidates).set({
     title: s(input.title),
@@ -78,7 +87,7 @@ export async function updateIdentite(
     birthName: s(input.birthName),
     birthDate: s(input.birthDate),
     birthCity: s(input.birthCity),
-    birthDepartment: s(input.birthDepartment),
+    birthDepartment: birthDepartment ?? s(input.birthDepartment),
     birthCountry: s(input.birthCountry),
     nationality: s(input.nationality),
     rqth: input.rqth,
@@ -94,7 +103,7 @@ export async function updateIdentite(
     updatedAt: new Date(),
   }).where(eq(candidates.id, candidateId));
 
-  if (input.nir.trim() && (user.role === "admin" || user.role === "admissions")) {
+  if (input.nir.trim() && can(user.role as AppRole, "candidates:viewNir")) {
     const { encrypted, iv } = encryptNir(input.nir.replace(/\s/g, ""));
     await db.update(candidates).set({ nirEncrypted: encrypted, nirIv: iv })
       .where(eq(candidates.id, candidateId));
@@ -124,6 +133,7 @@ export async function updateContact(
 ): Promise<{ success: boolean; error?: string }> {
   const user = await getCurrentUser();
   if (!user) return { success: false, error: "Non authentifié" };
+  if (!can(user.role as AppRole, "candidates:edit")) return { success: false, error: "Non autorisé" };
 
   await db.update(candidates).set({
     email: s(input.email),
@@ -155,6 +165,7 @@ export async function updateRecrutement(
 ): Promise<{ success: boolean; error?: string }> {
   const user = await getCurrentUser();
   if (!user) return { success: false, error: "Non authentifié" };
+  if (!can(user.role as AppRole, "candidates:edit")) return { success: false, error: "Non autorisé" };
 
   await db.update(candidates).set({
     cursusEnvisage: s(input.cursusEnvisage),
@@ -180,6 +191,7 @@ export async function deleteCandidate(
 ): Promise<{ success: boolean; error?: string }> {
   const user = await getCurrentUser();
   if (!user) return { success: false, error: "Non authentifie" };
+  if (!can(user.role as AppRole, "candidates:delete")) return { success: false, error: "Non autorisé" };
 
   const [candidate] = await db
     .select({
@@ -222,6 +234,7 @@ export async function permanentlyDeleteCandidate(
 ): Promise<{ success: boolean; error?: string }> {
   const user = await getCurrentUser();
   if (!user) return { success: false, error: "Non authentifie" };
+  if (!can(user.role as AppRole, "candidates:delete")) return { success: false, error: "Non autorisé" };
 
   const [candidate] = await db
     .select({
@@ -295,7 +308,7 @@ export async function revealNir(
   candidateId: string
 ): Promise<{ nir: string } | { error: string }> {
   const user = await getCurrentUser();
-  if (!user || (user.role !== "admin" && user.role !== "admissions")) {
+  if (!user || !can(user.role as AppRole, "candidates:viewNir")) {
     return { error: "Non autorisé" };
   }
   const row = await db.query.candidates.findFirst({
@@ -328,7 +341,6 @@ function getExtension(mimeType: string): string {
 export type CVDocument = {
   id: string;
   fileName: string;
-  storagePath: string;
   createdAt: string;
 };
 
@@ -336,12 +348,12 @@ export async function getCandidateCV(candidateId: string): Promise<CVDocument | 
   const user = await getCurrentUser();
   if (!user) return null;
   const [row] = await db
-    .select({ id: documents.id, fileName: documents.fileName, storagePath: documents.storagePath, createdAt: documents.createdAt })
+    .select({ id: documents.id, fileName: documents.fileName, createdAt: documents.createdAt })
     .from(documents)
     .where(and(eq(documents.candidateId, candidateId), eq(documents.documentType, "cv")))
     .limit(1);
   if (!row) return null;
-  return { id: row.id, fileName: row.fileName, storagePath: row.storagePath, createdAt: row.createdAt.toISOString() };
+  return { id: row.id, fileName: row.fileName, createdAt: row.createdAt.toISOString() };
 }
 
 export async function uploadCandidateCV(
@@ -365,7 +377,7 @@ export async function uploadCandidateCV(
   const uuid = crypto.randomUUID();
   const storagePath = `candidates/${candidateId}/${uuid}.${ext}`;
 
-  const supabase = await createClient();
+  const supabase = await createStorageClient();
   const bytes = await file.arrayBuffer();
 
   const { error: uploadError } = await supabase.storage
@@ -378,13 +390,18 @@ export async function uploadCandidateCV(
 
   // Upsert : one CV record per candidate
   const existing = await db
-    .select({ id: documents.id })
+    .select({ id: documents.id, storagePath: documents.storagePath })
     .from(documents)
     .where(and(eq(documents.candidateId, candidateId), eq(documents.documentType, "cv")))
     .limit(1);
 
   let documentId: string;
   if (existing.length > 0) {
+    const { error: removeError } = await supabase.storage.from("documents").remove([existing[0].storagePath]);
+    if (removeError) {
+      await supabase.storage.from("documents").remove([storagePath]);
+      return { success: false, error: `Erreur suppression ancien CV : ${removeError.message}` };
+    }
     documentId = existing[0].id;
     await db
       .update(documents)

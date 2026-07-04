@@ -24,6 +24,7 @@ import {
   loadAvailableCandidatesForNeed,
   type CandidateOption,
 } from "@/app/(app)/matching/actions";
+import { canNeedBeMatched } from "@/app/(app)/matching/rules";
 
 const ACTIVE_STATUSES = [
   { key: "ad_chase",        label: "Ad Chase" },
@@ -34,10 +35,6 @@ const ACTIVE_STATUSES = [
   { key: "client",          label: "Client" },
   { key: "rupture",         label: "Rupture" },
 ] as const;
-
-const MATCHING_ALLOWED_STATUSES = new Set([
-  "need_in_progress", "interview", "waiting_fre", "client", "rupture",
-]);
 
 const PROP_DOT: Record<string, string> = {
   cv_sent:     "bg-blue-400",
@@ -208,10 +205,12 @@ function NeedCard({
   need,
   onStatusChange,
   isDragging = false,
+  canCreateMatching = true,
 }: {
   need: NeedRow;
   onStatusChange: (id: string, status: string) => void;
   isDragging?: boolean;
+  canCreateMatching?: boolean;
 }) {
   const [mounted, setMounted] = useState(false);
   const [pickerOpen, setPickerOpen] = useState<string | null>(null);
@@ -266,7 +265,7 @@ function NeedCard({
     });
   }
 
-  const canAdd = !isDragging && MATCHING_ALLOWED_STATUSES.has(need.status);
+  const canAdd = !isDragging && canCreateMatching && canNeedBeMatched(need.status);
 
   return (
     <>
@@ -306,6 +305,7 @@ function NeedCard({
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger
+              id={`need-card-menu-${need.id}`}
               className="h-5 w-5 rounded flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground transition-colors shrink-0"
               onClick={(e) => e.stopPropagation()}
             >
@@ -497,10 +497,12 @@ function DraggableCard({
   need,
   onStatusChange,
   isGhost,
+  canCreateMatching = true,
 }: {
   need: NeedRow;
   onStatusChange: (id: string, status: string) => void;
   isGhost: boolean;
+  canCreateMatching?: boolean;
 }) {
   const { listeners, setNodeRef, transform } = useDraggable({ id: need.id });
   const style = transform ? { transform: CSS.Translate.toString(transform) } : undefined;
@@ -511,7 +513,7 @@ function DraggableCard({
       {...listeners}
       className={cn("cursor-grab active:cursor-grabbing", isGhost && "opacity-30")}
     >
-      <NeedCard need={need} onStatusChange={onStatusChange} />
+      <NeedCard need={need} onStatusChange={onStatusChange} canCreateMatching={canCreateMatching} />
     </div>
   );
 }
@@ -519,13 +521,14 @@ function DraggableCard({
 // ─── Droppable Column ────────────────────────────────────────────────────────
 
 function DroppableColumn({
-  status, label, needs, onStatusChange, activeId,
+  status, label, needs, onStatusChange, activeId, canCreateMatching = true,
 }: {
   status: string;
   label: string;
   needs: NeedRow[];
   onStatusChange: (id: string, status: string) => void;
   activeId: string | null;
+  canCreateMatching?: boolean;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
   const style = STATUS_STYLES[status];
@@ -556,6 +559,7 @@ function DroppableColumn({
             need={n}
             onStatusChange={onStatusChange}
             isGhost={activeId === n.id}
+            canCreateMatching={canCreateMatching}
           />
         ))}
       </div>
@@ -596,9 +600,11 @@ function LostDropZone() {
 export function KanbanPipeline({
   needs,
   onStatusChange,
+  canCreateMatching = true,
 }: {
   needs: NeedRow[];
   onStatusChange: (id: string, status: string) => void;
+  canCreateMatching?: boolean;
 }) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
@@ -630,6 +636,7 @@ export function KanbanPipeline({
               needs={grouped[key] ?? []}
               onStatusChange={onStatusChange}
               activeId={activeId}
+              canCreateMatching={canCreateMatching}
             />
           ))}
         </div>

@@ -5,6 +5,7 @@ import {
   integer,
   timestamp,
   date,
+  jsonb,
   check,
   index,
 } from "drizzle-orm/pg-core";
@@ -14,6 +15,13 @@ import { profiles } from "./profiles";
 import { companies } from "./companies";
 import { companyContacts } from "./companies";
 import { cursus } from "./ypareo";
+
+export type NeedRemunerationLine = {
+  startDate?: string;
+  endDate?: string;
+  percent?: string;
+  reference?: string;
+};
 
 export const needs = pgTable(
   "needs",
@@ -49,14 +57,23 @@ export const needs = pgTable(
     masterJobTitle: text("master_job_title"),
     masterPhone: text("master_phone"),
     masterEmail: text("master_email"),
+    masterDiploma: text("master_diploma"),
+    masterDiplomaLevel: text("master_diploma_level"),
 
     // Contrat CERFA FA13
     weeklyHours: text("weekly_hours"),
     contractType: text("contract_type"),
+    contractConclusionDate: date("contract_conclusion_date"),
+    contractPracticalStartDate: date("contract_practical_start_date"),
+    contractMadeAt: text("contract_made_at"),
     salaryReference: text("salary_reference"),
     smcAmount: text("smc_amount"),
     overtimeHandling: text("overtime_handling"),
     endDate: date("end_date"),
+    remunerationLines: jsonb("remuneration_lines").$type<NeedRemunerationLine[]>(),
+    monthlyGrossSalary: text("monthly_gross_salary"),
+    hourlyGrossSalary: text("hourly_gross_salary"),
+    rncpCode: text("rncp_code"),
 
     // Avantages en nature
     benefitFood: text("benefit_food"),
@@ -76,5 +93,8 @@ export const needs = pgTable(
     index("needs_company_idx").on(t.companyId),
     index("needs_owner_idx").on(t.ownerId),
     index("needs_deleted_at_idx").on(t.deletedAt),
+    index("needs_pipeline_idx").on(t.deletedAt, t.status, t.title),
+    index("needs_created_at_idx").on(t.createdAt),
+    index("needs_target_cursus_idx").on(t.targetCursusId),
   ]
 );

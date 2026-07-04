@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { AlertTriangle, CheckCircle2, Loader2, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Modal,
   ModalBody,
@@ -29,6 +30,19 @@ type Props = {
   onCancel: () => void;
   onConfirm: (draft: YpareoPlacementDraft, selectedClassId: string | null) => void | Promise<void>;
 };
+
+function computeMissingFields(draft: YpareoPlacementDraft | null) {
+  if (!draft) return [];
+  const missing: string[] = [];
+  for (const section of draft.sections) {
+    for (const field of section.fields) {
+      if (field.required && !field.value?.trim()) {
+        missing.push(`${section.title} - ${field.label}`);
+      }
+    }
+  }
+  return missing;
+}
 
 export function YpareoPlacementModal({
   open,
@@ -74,16 +88,35 @@ export function YpareoPlacementModal({
     };
   }, [open, source, sourceId]);
 
-  const canConfirm = Boolean(draft && draft.blockingIssues.length === 0);
+  const missingFields = useMemo(() => computeMissingFields(draft), [draft]);
+  const canConfirm = Boolean(draft && draft.blockingIssues.length === 0 && missingFields.length === 0);
   const selectedClass = useMemo(
     () => draft?.classOptions.find((option) => option.id === selectedClassId) ?? null,
     [draft, selectedClassId],
   );
 
+  function updateField(sectionTitle: string, label: string, value: string) {
+    setDraft((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        sections: current.sections.map((section) => section.title !== sectionTitle
+          ? section
+          : {
+              ...section,
+              fields: section.fields.map((field) => field.label !== label
+                ? field
+                : { ...field, value: value.trim() ? value : null }),
+            }),
+      };
+    });
+  }
+
   function handleConfirm() {
     if (!draft || !canConfirm) return;
+    const editedDraft = { ...draft, missingFields };
     startTransition(async () => {
-      await onConfirm(draft, selectedClassId || null);
+      await onConfirm(editedDraft, selectedClassId || null);
     });
   }
 
@@ -135,7 +168,12 @@ export function YpareoPlacementModal({
                   <label className="block text-xs font-medium text-muted-foreground">Classe Ypareo</label>
                   <select
                     value={selectedClassId}
-                    onChange={(event) => setSelectedClassId(event.target.value)}
+                    onChange={(event) => {
+                      const nextId = event.target.value;
+                      setSelectedClassId(nextId);
+                      const option = draft.classOptions.find((item) => item.id === nextId);
+                      updateField("Formation", "Classe Ypareo", option?.name ?? "");
+                    }}
                     className="mt-1 flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
                   >
                     {draft.classOptions.length === 0 ? (
@@ -170,13 +208,13 @@ export function YpareoPlacementModal({
                 </Notice>
               )}
 
-              {draft.missingFields.length > 0 ? (
+              {missingFields.length > 0 ? (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
                   <p className="text-xs font-semibold text-amber-900">
-                    Champs CERFA requis a completer ({draft.missingFields.length})
+                    Champs CERFA requis a completer ({missingFields.length})
                   </p>
                   <div className="mt-2 flex flex-wrap gap-1.5">
-                    {draft.missingFields.map((item) => (
+                    {missingFields.map((item) => (
                       <span key={item} className="rounded-full bg-white px-2 py-0.5 text-xs text-amber-800 ring-1 ring-amber-200">
                         {item}
                       </span>
@@ -197,14 +235,21 @@ export function YpareoPlacementModal({
                     </div>
                     <div className="divide-y">
                       {section.fields.map((field) => (
-                        <div key={`${section.title}-${field.label}`} className="grid grid-cols-[0.9fr_1.1fr] gap-3 px-4 py-2.5 text-sm">
+                        <div key={`${section.title}-${field.label}`} className="grid gap-2 px-4 py-2.5 text-sm sm:grid-cols-[0.9fr_1.1fr] sm:gap-3">
                           <span className="text-xs text-muted-foreground">
                             {field.label}
                             {field.required && <span className="ml-1 text-destructive">*</span>}
                           </span>
-                          <span className={cn("min-w-0 break-words", field.value ? "text-foreground" : "text-muted-foreground")}>
-                            {field.value ?? "A completer"}
-                          </span>
+                          <Input
+                            value={field.value ?? ""}
+                            placeholder={field.required ? "A completer" : "Optionnel"}
+                            onChange={(event) => updateField(section.title, field.label, event.target.value)}
+                            disabled={isPending}
+                            className={cn(
+                              "h-8 text-sm",
+                              field.required && !field.value?.trim() && "border-amber-300 bg-amber-50",
+                            )}
+                          />
                         </div>
                       ))}
                     </div>
@@ -220,7 +265,11 @@ export function YpareoPlacementModal({
             Annuler
           </Button>
           <Button onClick={handleConfirm} disabled={!canConfirm || loading || isPending}>
-            {isPending ? "Confirmation..." : `Confirmer ${targetLabel}`}
+            {isPending
+              ? "Confirmation..."
+              : missingFields.length > 0
+                ? "Completer les champs requis"
+                : `Confirmer ${targetLabel}`}
           </Button>
         </ModalFooter>
       </ModalContent>

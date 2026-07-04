@@ -162,7 +162,7 @@ export function SendEmailModal({
     }
     setCvOverrides((prev) => ({
       ...prev,
-      [candidateId]: { documentId: result.documentId, fileName: files[0].name, storagePath: "" },
+      [candidateId]: { documentId: result.documentId, fileName: files[0].name },
     }));
     toast.success("CV uploadé");
     pendingCandIdRef.current = null;

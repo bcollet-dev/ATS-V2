@@ -1,4 +1,5 @@
 import { requireAuth } from "@/lib/auth";
+import { can, type AppRole } from "@/lib/permissions";
 import { db } from "@/db";
 import { profiles, companies } from "@/db/schema";
 import { eq, isNull, and, asc } from "drizzle-orm";
@@ -48,7 +49,9 @@ export default async function CompanyPage({
 
   if (!data) notFound();
   const { company, contacts, linkedNeeds } = data;
-  const canEdit = actor.role !== "direction";
+  const role = actor.role as AppRole;
+  const canEdit = can(role, "companies:edit");
+  const canDelete = can(role, "companies:delete");
 
   // Task rows need assignee names
   const tasksWithNames = tasks.map((t) => {
@@ -57,7 +60,7 @@ export default async function CompanyPage({
   });
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       <TaskContextScope
         attachment={{
           entityType: "company",
@@ -69,7 +72,7 @@ export default async function CompanyPage({
 
       <Link
         href="/annuaire"
-        className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-6 w-fit"
+        className="mb-4 flex w-fit items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground sm:mb-6"
       >
         <ArrowLeft className="h-4 w-4" />
         Retour à l&apos;annuaire
@@ -89,15 +92,15 @@ export default async function CompanyPage({
       )}
 
       {/* Header (client pour le menu 3 points) */}
-      <CompanyHeader company={company} canEdit={canEdit} />
+      <CompanyHeader company={company} canEdit={canEdit} canDelete={canDelete} />
 
       {/* Layout 2 colonnes */}
-      <div className="flex gap-6 items-start">
+      <div className="flex flex-col gap-6 xl:flex-row xl:items-start">
         {/* Colonne principale */}
         <div className="flex-1 min-w-0 space-y-6">
           <BlocInfos companyId={id} initialData={company} canEdit={canEdit} />
 
-          <div className="grid grid-cols-2 gap-6 items-start">
+          <div className="grid grid-cols-1 gap-6 items-start lg:grid-cols-2">
             <BlocBesoins
               companyId={id}
               companyName={company.name}
@@ -110,7 +113,7 @@ export default async function CompanyPage({
             <BlocDocuments companyId={id} initialDocuments={documents} canEdit={canEdit} />
           </div>
 
-          <div className="grid grid-cols-2 gap-6 items-start">
+          <div className="grid grid-cols-1 gap-6 items-start lg:grid-cols-2">
             <BlocTaches
               companyId={id}
               companyName={company.name}
@@ -124,7 +127,7 @@ export default async function CompanyPage({
         </div>
 
         {/* Sidebar */}
-        <div className="w-80 shrink-0 space-y-4">
+        <div className="w-full shrink-0 space-y-4 xl:w-80">
           <BlocConsultantReferent
             companyId={id}
             initialOwnerId={company.ownerId}

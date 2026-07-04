@@ -304,8 +304,10 @@ export async function deleteTask(
   return { success: true };
 }
 
-export async function markNotificationsRead(userId: string): Promise<void> {
+export async function markNotificationsRead(): Promise<void> {
+  const user = await getCurrentUser();
+  if (!user) return;
   await db.update(notifications).set({ readAt: new Date() }).where(
-    and(eq(notifications.userId, userId), isNull(notifications.readAt))
+    and(eq(notifications.userId, user.id), isNull(notifications.readAt))
   );
 }

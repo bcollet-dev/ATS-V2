@@ -43,10 +43,12 @@ export function BlocFormations({
   candidateId,
   initialFormations,
   embedded,
+  canEdit = true,
 }: {
   candidateId: string;
   initialFormations: FormationRow[];
   embedded?: boolean;
+  canEdit?: boolean;
 }) {
   const [formations, setFormations] = useState<FormationRow[]>(initialFormations);
   const [dialog, setDialog] = useState<DialogState>({ open: false });
@@ -110,10 +112,12 @@ export function BlocFormations({
         ? <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Formations</span>
         : <h2 className="text-sm font-semibold">Formations</h2>
       }
-      <Button variant="ghost" size="sm" className="gap-1.5 h-7 text-xs" onClick={openAdd}>
-        <Plus className="h-3.5 w-3.5" />
-        Ajouter
-      </Button>
+      {canEdit && (
+        <Button variant="ghost" size="sm" className="gap-1.5 h-7 text-xs" onClick={openAdd}>
+          <Plus className="h-3.5 w-3.5" />
+          Ajouter
+        </Button>
+      )}
     </div>
   );
 
@@ -143,14 +147,16 @@ export function BlocFormations({
                     }
                   </p>
                 </div>
-                <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                  <button onClick={() => openEdit(formation)} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
-                    <Pencil className="h-3.5 w-3.5" />
-                  </button>
-                  <button onClick={() => handleDelete(formation)} className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
+                {canEdit && (
+                  <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                    <button onClick={() => openEdit(formation)} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button onClick={() => handleDelete(formation)} className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -178,7 +184,7 @@ export function BlocFormations({
               <Label htmlFor="fo-inst">Établissement *</Label>
               <Input id="fo-inst" {...register("institution", { required: true })} placeholder="Ex : Lycée Victor Hugo" />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="fo-start">Début *</Label>
                 <Input id="fo-start" type="month" {...register("startMonth", { required: true })} />

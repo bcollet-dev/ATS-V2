@@ -1,0 +1,36 @@
+project_id = "eda-ats-v2"
+
+[auth]
+site_url = "https://eda-hw5dy5ltp-bcollet-devs-projects.vercel.app"
+additional_redirect_urls = [
+  "https://eda-hw5dy5ltp-bcollet-devs-projects.vercel.app/auth/callback",
+  "https://eda-ats-bcollet-dev-bcollet-devs-projects.vercel.app/auth/callback",
+  "https://ats-five-red.vercel.app/auth/callback",
+  "http://localhost:3000/auth/callback",
+  "http://localhost:3002/auth/callback"
+]
+
+[auth.external.google]
+enabled = true
+client_id = "env(GOOGLE_CLIENT_ID)"
+secret = "env(GOOGLE_CLIENT_SECRET)"
+redirect_uri = ""
+skip_nonce_check = false
+
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = true
+secure_password_change = false
+max_frequency = "1m0s"
+otp_length = 8
+otp_expiry = 3600
+
+[storage.vector]
+enabled = false
+max_buckets = 10
+max_indexes = 5

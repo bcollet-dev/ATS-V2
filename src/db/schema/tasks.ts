@@ -40,6 +40,7 @@ export const tasks = pgTable(
     index("tasks_due_at_idx").on(t.dueAt),
     index("tasks_candidate_idx").on(t.candidateId),
     index("tasks_company_idx").on(t.companyId),
+    index("tasks_open_due_idx").on(t.completedAt, t.deletedAt, t.dueAt),
   ]
 );
 

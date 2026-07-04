@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
       scopes: "https://www.googleapis.com/auth/gmail.send",
       queryParams: {
         access_type: "offline",
-        prompt: "consent",
+        prompt: "select_account consent",
       },
     },
   });

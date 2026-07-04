@@ -28,6 +28,7 @@ import {
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
 import type { CandidatRow } from "./actions";
+import { GenerateFreButton } from "@/components/fre/GenerateFreButton";
 import {
   updateMatchingStatus,
   deleteMatching,
@@ -35,6 +36,7 @@ import {
   loadAvailableNeedsForCandidate,
   type NeedOption,
 } from "@/app/(app)/matching/actions";
+import { canCandidateBeMatched } from "@/app/(app)/matching/rules";
 
 const ACTIVE_STATUSES = [
   { key: "to_call",           label: "À appeler" },
@@ -278,7 +280,10 @@ function CandidatCard({
 
   const inactive = candidate.isInactive;
   const nextOverdue = candidate.nextTaskOverdue;
-  const canAdd = !isDragging;
+  const canAdd = !isDragging && canCandidateBeMatched(candidate.status);
+  const freMatching = candidate.status === "waiting_fre"
+    ? candidate.needMatchings.find((matching) => matching.propositionStatus === "waiting_fre" && !matching.isFrozen) ?? null
+    : null;
 
   return (
     <>
@@ -315,6 +320,7 @@ function CandidatCard({
           </Link>
           <DropdownMenu>
             <DropdownMenuTrigger
+              id={`candidate-card-menu-${candidate.id}`}
               className="h-5 w-5 rounded flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground transition-colors shrink-0"
               onClick={(e) => e.stopPropagation()}
             >
@@ -374,15 +380,11 @@ function CandidatCard({
                     const isEditable = !m.isFrozen && m.propositionStatus !== "placed";
                     return (
                       <div key={m.matchingId} className="relative group/chip flex items-center gap-1 min-w-0">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (isEditable) setPickerOpen(pickerOpen === m.matchingId ? null : m.matchingId);
-                          }}
-                          className={cn(
-                            "flex items-center gap-1.5 flex-1 min-w-0 text-left",
-                            isEditable ? "cursor-pointer hover:opacity-75" : "cursor-default"
-                          )}
+                        <Link
+                          href={`/besoins/${m.needId}`}
+                          onClick={(e) => e.stopPropagation()}
+                          onPointerDown={(e) => e.stopPropagation()}
+                          className="flex items-center gap-1.5 flex-1 min-w-0 text-left hover:text-primary transition-colors"
                         >
                           <span className={cn(
                             "h-1.5 w-1.5 rounded-full shrink-0",
@@ -392,12 +394,22 @@ function CandidatCard({
                             "text-[10px] truncate flex-1",
                             m.isFrozen ? "text-muted-foreground" : "text-foreground"
                           )}>{m.needTitle}</span>
-                          <span className={cn(
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (isEditable) setPickerOpen(pickerOpen === m.matchingId ? null : m.matchingId);
+                          }}
+                          onPointerDown={(e) => e.stopPropagation()}
+                          disabled={!isEditable}
+                          className={cn(
                             "text-[10px] px-1 rounded shrink-0",
-                            m.isFrozen ? "bg-muted text-muted-foreground" : (PROP_CHIP[m.propositionStatus] ?? "bg-muted text-muted-foreground")
+                            isEditable && "hover:opacity-75",
+                            m.isFrozen ? "bg-muted text-muted-foreground" : (PROP_CHIP[m.propositionStatus] ?? "bg-muted text-muted-foreground"),
+                            !isEditable && "cursor-default",
                           )}>
-                            {PROP_SHORT[m.propositionStatus] ?? m.propositionStatus}
-                          </span>
+                          {PROP_SHORT[m.propositionStatus] ?? m.propositionStatus}
                         </button>
                         {isEditable && (
                           <button
@@ -455,6 +467,17 @@ function CandidatCard({
               </button>
             )}
           </div>
+        )}
+
+        {freMatching && !isDragging && (
+          <GenerateFreButton
+            needId={freMatching.needId}
+            candidateId={candidate.id}
+            variant="outline"
+            size="xs"
+            className="mb-2 h-6 w-full text-[10px]"
+            label="Générer FRE"
+          />
         )}
 
         {/* Footer */}

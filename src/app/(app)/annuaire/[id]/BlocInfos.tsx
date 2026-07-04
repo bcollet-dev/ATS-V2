@@ -218,7 +218,7 @@ export function BlocInfos({
         {/* ── Section Infos ── */}
         {isEditingInfo ? (
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-1.5 col-span-2">
                 <Label htmlFor="co-name">Raison sociale</Label>
                 <Input id="co-name" value={valuesInfo.name} onChange={fi("name")} autoFocus />
@@ -274,7 +274,7 @@ export function BlocInfos({
             </div>
           </div>
         ) : (
-          <dl className="grid grid-cols-2 gap-x-8 gap-y-4">
+          <dl className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
             <ReadField label="Raison sociale" value={initialData.name} />
             <ReadField label="Secteur" value={initialData.sector} />
             <ReadField label="Adresse" value={initialData.address} />
@@ -319,7 +319,7 @@ export function BlocInfos({
               </div>
             )}
           </div>
-          <dl className="grid grid-cols-2 gap-x-8 gap-y-3">
+          <dl className="grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-2">
             <ReadField label="SIRET" value={initialData.siret} />
             <ReadField label="SIREN" value={initialData.siren} />
             <ReadField label="Code NAF" value={initialData.nafCode} />
@@ -353,7 +353,7 @@ export function BlocInfos({
 
           {isEditingFRE ? (
             <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label className="text-xs">Code IDCC</Label>
                   <Input className="h-8 text-sm" value={valuesFRE.idcc} onChange={ff("idcc")} autoFocus />
@@ -376,7 +376,7 @@ export function BlocInfos({
                 </div>
                 <div className="space-y-1.5 col-span-2">
                   <Label className="text-xs">Représentant légal</Label>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     <Input className="h-8 text-sm" placeholder="Prénom" value={valuesFRE.legalRepFirstName} onChange={ff("legalRepFirstName")} />
                     <Input className="h-8 text-sm" placeholder="Nom" value={valuesFRE.legalRepLastName} onChange={ff("legalRepLastName")} />
                   </div>
@@ -392,7 +392,7 @@ export function BlocInfos({
               </div>
             </div>
           ) : (
-            <dl className="grid grid-cols-2 gap-x-8 gap-y-3">
+            <dl className="grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-2">
               <ReadField label="Code IDCC" value={initialData.idcc} />
               <ReadField label="OPCO" value={initialData.opco} />
               <ReadField label="Convention collective" value={initialData.collectiveAgreement} />

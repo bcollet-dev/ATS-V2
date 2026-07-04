@@ -1,4 +1,5 @@
 import { requireAuth } from "@/lib/auth";
+import { can, type AppRole } from "@/lib/permissions";
 import { db } from "@/db";
 import {
   candidates, candidateExperiences, candidateFormations,
@@ -29,6 +30,8 @@ import {
 import { listCandidateDocuments } from "./document-actions";
 import { loadCandidateTasks } from "./task-actions";
 import { TaskContextScope } from "@/components/tasks/FloatingTaskCreator";
+import { GenerateFreButton } from "@/components/fre/GenerateFreButton";
+import { resolveFrenchBirthDepartment } from "@/lib/birth-department";
 
 const STATUS_LABELS: Record<string, string> = {
   to_call: "À appeler",
@@ -115,13 +118,36 @@ export default async function CandidatPage({
 
   if (!candidat) notFound();
 
-  const canRevealNir = user.role === "admin" || user.role === "admissions";
+  const resolvedBirthDepartment = await resolveFrenchBirthDepartment({
+    currentDepartment: candidat.birthDepartment,
+    birthCity: candidat.birthCity,
+    birthCountry: candidat.birthCountry,
+  });
+  if (resolvedBirthDepartment && resolvedBirthDepartment !== candidat.birthDepartment) {
+    await db
+      .update(candidates)
+      .set({ birthDepartment: resolvedBirthDepartment, updatedAt: new Date() })
+      .where(eq(candidates.id, candidat.id));
+    candidat.birthDepartment = resolvedBirthDepartment;
+  }
+
+  const role = user.role as AppRole;
+  const canRevealNir = can(role, "candidates:viewNir");
+  const canEditCandidate = can(role, "candidates:edit");
+  const canDeleteCandidate = can(role, "candidates:delete");
+  const canCreateMatching = can(role, "matchings:create");
+  const canGenerateFre = role !== "direction";
   const badgeClass = STATUS_BADGE[candidat.status] ?? "bg-muted text-muted-foreground";
+  const freMatching = candidat.status === "waiting_fre"
+    ? candidateMatchings.find((matching) => matching.propositionStatus === "waiting_fre" && !matching.isFrozen)
+      ?? candidateMatchings.find((matching) => matching.needStatus === "waiting_fre" && !matching.isFrozen)
+      ?? null
+    : null;
 
   const serializedTasks = candidateTasks;
 
   return (
-    <div className="p-6 max-w-5xl">
+    <div className="max-w-5xl p-4 sm:p-6">
       <TaskContextScope
         attachment={{
           entityType: "candidate",
@@ -133,22 +159,31 @@ export default async function CandidatPage({
 
       <Link
         href="/candidats"
-        className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-6 w-fit"
+        className="mb-4 flex w-fit items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground sm:mb-6"
       >
         <ArrowLeft className="h-4 w-4" />
         Retour au pipeline
       </Link>
 
-      <div className="flex items-start justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-semibold">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="break-words text-2xl font-semibold">
             {candidat.firstName} {candidat.lastName}
           </h1>
           {candidat.cursusEnvisage && (
             <p className="text-sm text-muted-foreground mt-1">{candidat.cursusEnvisage}</p>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {canGenerateFre && freMatching && (
+            <GenerateFreButton
+              needId={freMatching.needId}
+              candidateId={candidat.id}
+              size="sm"
+              className="h-8"
+              label="Générer FRE"
+            />
+          )}
           <Badge className={`text-xs font-medium px-2 py-1 rounded-md border-0 ${badgeClass}`}>
             {STATUS_LABELS[candidat.status] ?? candidat.status}
           </Badge>
@@ -157,12 +192,14 @@ export default async function CandidatPage({
               Sur Ypareo
             </Badge>
           )}
-          <DeleteEntityButton
-            entityType="candidate"
-            entityId={candidat.id}
-            label={`${candidat.firstName} ${candidat.lastName}`}
-            redirectTo="/candidats"
-          />
+          {canDeleteCandidate && (
+            <DeleteEntityButton
+              entityType="candidate"
+              entityId={candidat.id}
+              label={`${candidat.firstName} ${candidat.lastName}`}
+              redirectTo="/candidats"
+            />
+          )}
         </div>
       </div>
 
@@ -171,6 +208,7 @@ export default async function CandidatPage({
         <BlocContact
           candidateId={candidat.id}
           data={{ email: candidat.email, phone: candidat.phone }}
+          canEdit={canEditCandidate}
         />
 
         {/* Identité (2/3) | Gmail (1/3) */}
@@ -179,6 +217,7 @@ export default async function CandidatPage({
             <BlocIdentite
               candidateId={candidat.id}
               canRevealNir={canRevealNir}
+              canEdit={canEditCandidate}
               data={{
                 title: candidat.title,
                 firstName: candidat.firstName,
@@ -215,6 +254,7 @@ export default async function CandidatPage({
           candidateId={candidat.id}
           cursus={cursus}
           data={{ cursusEnvisage: candidat.cursusEnvisage, source: candidat.source }}
+          canEdit={canEditCandidate}
         />
 
         {/* Tâches */}
@@ -240,18 +280,21 @@ export default async function CandidatPage({
               candidateId={candidat.id}
               initialSkills={skills}
               embedded
+              canEdit={canEditCandidate}
             />
             <BlocExperiences
               key={experiences.map((e) => e.id).join(",")}
               candidateId={candidat.id}
               initialExperiences={experiences}
               embedded
+              canEdit={canEditCandidate}
             />
             <BlocFormations
               key={formations.map((f) => f.id).join(",")}
               candidateId={candidat.id}
               initialFormations={formations}
               embedded
+              canEdit={canEditCandidate}
             />
           </div>
         </section>
@@ -261,6 +304,8 @@ export default async function CandidatPage({
           candidateId={candidat.id}
           initialMatchings={candidateMatchings}
           availableNeeds={availableNeeds}
+          candidateStatus={candidat.status}
+          canCreateMatching={canCreateMatching}
         />
 
         {/* Historique */}

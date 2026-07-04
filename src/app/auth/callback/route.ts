@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { db } from "@/db";
 import { profiles } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { encryptSecret } from "@/lib/secret-box";
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest) {
       if (refreshToken) {
         await db
           .update(profiles)
-          .set({ googleRefreshToken: refreshToken })
+          .set({ googleRefreshToken: encryptSecret(refreshToken) })
           .where(eq(profiles.id, data.session.user.id));
       }
       return NextResponse.redirect(`${origin}${next}`);

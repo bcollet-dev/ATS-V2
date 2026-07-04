@@ -51,7 +51,7 @@ function SheetContent({
       <SheetOverlay />
       <Dialog.Popup
         className={cn(
-          "fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col bg-background shadow-2xl",
+          "fixed inset-y-0 right-0 z-50 flex w-full max-w-[min(100vw,28rem)] flex-col bg-background shadow-2xl",
           "data-open:animate-in data-open:slide-in-from-right",
           "data-closed:animate-out data-closed:slide-out-to-right",
           "duration-300",
@@ -68,7 +68,7 @@ function SheetHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       className={cn(
-        "flex items-center justify-between border-b px-6 py-4 shrink-0",
+        "flex items-center justify-between border-b px-4 py-4 shrink-0 sm:px-6",
         className
       )}
       {...props}
@@ -102,7 +102,7 @@ function SheetClose({ className }: { className?: string }) {
 function SheetBody({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
-      className={cn("flex-1 overflow-y-auto px-6 py-5 space-y-4", className)}
+      className={cn("flex-1 overflow-y-auto px-4 py-5 space-y-4 sm:px-6", className)}
       {...props}
     />
   );
@@ -112,7 +112,7 @@ function SheetFooter({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       className={cn(
-        "flex items-center justify-end gap-2 border-t px-6 py-4 shrink-0",
+        "flex flex-col-reverse items-stretch justify-end gap-2 border-t px-4 py-4 shrink-0 sm:flex-row sm:items-center sm:px-6",
         className
       )}
       {...props}

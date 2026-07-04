@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { db } from "@/db";
 import { profiles } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { encryptSecret } from "@/lib/secret-box";
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
@@ -50,7 +51,7 @@ export async function GET(request: NextRequest) {
 
   await db
     .update(profiles)
-    .set({ googleRefreshToken: tokens.refresh_token })
+    .set({ googleRefreshToken: encryptSecret(tokens.refresh_token) })
     .where(eq(profiles.id, user.id));
 
   return done(nextPath === "/trames-mail" ? "/trames-mail?gmail=connected" : nextPath);

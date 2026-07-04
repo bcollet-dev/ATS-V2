@@ -52,10 +52,12 @@ export function BlocExperiences({
   candidateId,
   initialExperiences,
   embedded,
+  canEdit = true,
 }: {
   candidateId: string;
   initialExperiences: ExperienceRow[];
   embedded?: boolean;
+  canEdit?: boolean;
 }) {
   const [experiences, setExperiences] = useState<ExperienceRow[]>(initialExperiences);
   const [dialog, setDialog] = useState<DialogState>({ open: false });
@@ -119,10 +121,12 @@ export function BlocExperiences({
         ? <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Expériences professionnelles</span>
         : <h2 className="text-sm font-semibold">Expériences professionnelles</h2>
       }
-      <Button variant="ghost" size="sm" className="gap-1.5 h-7 text-xs" onClick={openAdd}>
-        <Plus className="h-3.5 w-3.5" />
-        Ajouter
-      </Button>
+      {canEdit && (
+        <Button variant="ghost" size="sm" className="gap-1.5 h-7 text-xs" onClick={openAdd}>
+          <Plus className="h-3.5 w-3.5" />
+          Ajouter
+        </Button>
+      )}
     </div>
   );
 
@@ -155,14 +159,16 @@ export function BlocExperiences({
                     }
                   </p>
                 </div>
-                <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                  <button onClick={() => openEdit(exp)} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
-                    <Pencil className="h-3.5 w-3.5" />
-                  </button>
-                  <button onClick={() => handleDelete(exp)} className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
+                {canEdit && (
+                  <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                    <button onClick={() => openEdit(exp)} className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button onClick={() => handleDelete(exp)} className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
               </div>
               {exp.description && (
                 <p className="text-xs text-muted-foreground mt-1.5 line-clamp-2">{exp.description}</p>
@@ -189,7 +195,7 @@ export function BlocExperiences({
               <Label htmlFor="xp-jobTitle">Intitulé du poste *</Label>
               <Input id="xp-jobTitle" {...register("jobTitle", { required: true })} placeholder="Ex : Développeur web" />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="xp-company">Entreprise *</Label>
                 <Input id="xp-company" {...register("company", { required: true })} />
@@ -204,7 +210,7 @@ export function BlocExperiences({
                 )} />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="xp-start">Début *</Label>
                 <Input id="xp-start" type="month" {...register("startMonth", { required: true })} />

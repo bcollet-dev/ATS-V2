@@ -11,7 +11,6 @@ import { Label } from "@/components/ui/label";
 import { permanentlyDeleteNeed, updateNeedStatus, type NeedRow } from "./actions";
 import {
   loadMatchingsForNeed,
-  markMatchingWinner,
   updateMatchingStatus,
   deleteAllMatchingsForNeed,
 } from "@/app/(app)/matching/actions";
@@ -41,6 +40,7 @@ function LostModal({
   onConfirm,
   onDelete,
   onCancel,
+  canDelete = true,
 }: {
   open: boolean;
   needTitle: string;
@@ -48,6 +48,7 @@ function LostModal({
   onConfirm: (reason: string) => void;
   onDelete: () => void;
   onCancel: () => void;
+  canDelete?: boolean;
 }) {
   const [reason, setReason] = useState("");
   const [error, setError] = useState(false);
@@ -97,18 +98,20 @@ function LostModal({
           </div>
         </ModalBody>
         <ModalFooter>
-          <Button
-            variant="ghost"
-            className="mr-auto text-destructive hover:bg-destructive/10 hover:text-destructive"
-            onClick={() => {
-              if (window.confirm(`Supprimer définitivement ${needTitle} ? Cette action ne pourra pas être annulée.`)) {
-                handleDelete();
-              }
-            }}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            Supprimer
-          </Button>
+          {canDelete && (
+            <Button
+              variant="ghost"
+              className="mr-auto text-destructive hover:bg-destructive/10 hover:text-destructive"
+              onClick={() => {
+                if (window.confirm(`Supprimer définitivement ${needTitle} ? Cette action ne pourra pas être annulée.`)) {
+                  handleDelete();
+                }
+              }}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Supprimer
+            </Button>
+          )}
           <Button variant="outline" onClick={handleCancel}>Annuler</Button>
           <Button variant="destructive" onClick={handleConfirm}>Confirmer</Button>
         </ModalFooter>
@@ -449,11 +452,15 @@ export function PipelineClient({
   cursus,
   profiles,
   companies,
+  canCreateMatching = true,
+  canDelete = true,
 }: {
   needs: NeedRow[];
   cursus: { id: string; name: string }[];
   profiles: { id: string; fullName: string }[];
   companies: { id: string; name: string }[];
+  canCreateMatching?: boolean;
+  canDelete?: boolean;
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("pipeline");
@@ -477,6 +484,12 @@ export function PipelineClient({
     (state, { id, status }: { id: string; status: string }) =>
       state.map((n) => (n.id === id ? { ...n, status } : n))
   );
+
+  useEffect(() => {
+    if (window.matchMedia("(max-width: 767px)").matches) {
+      setView("list");
+    }
+  }, []);
 
   const pipeline = needs.filter((n) => !ARCHIVED.has(n.status));
   const archives = needs.filter((n) => ARCHIVED.has(n.status));
@@ -612,41 +625,52 @@ export function PipelineClient({
     });
   }
 
-  function handleYpareoConfirm(draft: YpareoPlacementDraft, selectedClassId: string | null) {
+  async function handleYpareoConfirm(draft: YpareoPlacementDraft, selectedClassId: string | null) {
     if (!pendingYpareo) return;
     const { id } = pendingYpareo;
-    setPendingYpareo(null);
-    pushYpareoPlacement(draft, selectedClassId).then((result) => {
-      if (!result.success) toast.error(result.error ?? "Erreur lors de l'envoi sur Ypareo");
-    }).catch(() => {
+    try {
+      const result = await pushYpareoPlacement(draft, selectedClassId);
+      if (!result.success) {
+        toast.error(result.error ?? "Erreur lors de l'envoi sur Ypareo");
+        startTransition(() => {
+          setOptimistic({ id, status: "waiting_fre" });
+          router.refresh();
+        });
+        return;
+      }
+      toast.success("Envoi Ypareo confirme");
+      setPendingYpareo(null);
+      startTransition(() => {
+        setOptimistic({ id, status: "client" });
+        router.refresh();
+      });
+    } catch {
       toast.error("Erreur lors de l'envoi sur Ypareo");
-    });
-    startTransition(async () => {
-      setOptimistic({ id, status: "client" });
-      if (draft.matchingId) await markMatchingWinner(draft.matchingId);
-      if (draft.candidateId) await updateCandidateStatus(draft.candidateId, "placed");
-      await updateNeedStatus(id, "client");
-    });
+      startTransition(() => {
+        setOptimistic({ id, status: "waiting_fre" });
+        router.refresh();
+      });
+    }
   }
 
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="px-6 pt-6 pb-0 flex items-center gap-3">
-        <div className="flex-1">
-          <h1 className="text-2xl font-semibold">Besoins</h1>
+      <div className="flex flex-col gap-3 px-4 pt-4 pb-0 sm:flex-row sm:items-center sm:px-6 sm:pt-6">
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate text-2xl font-semibold">Besoins</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             {pipeline.length} actif{pipeline.length !== 1 ? "s" : ""} · {archives.length} perdu{archives.length !== 1 ? "s" : ""}
           </p>
         </div>
-        <Button size="sm" className="gap-1.5" onClick={() => setDrawerOpen(true)}>
+        <Button size="sm" className="w-full gap-1.5 sm:w-auto" onClick={() => setDrawerOpen(true)}>
           <Plus className="h-3.5 w-3.5" />
           Nouveau besoin
         </Button>
       </div>
 
       {/* Tabs + view toggle */}
-      <div className="px-6 mt-4 flex items-center border-b">
+      <div className="mt-3 flex flex-wrap items-end gap-y-2 border-b px-4 sm:mt-4 sm:px-6">
         <button
           onClick={() => setTab("pipeline")}
           className={cn(
@@ -708,7 +732,7 @@ export function PipelineClient({
       <div className="flex-1 overflow-auto">
         {tab === "pipeline" ? (
           view === "kanban" ? (
-            <KanbanPipeline needs={pipeline} onStatusChange={handleStatusChange} />
+            <KanbanPipeline needs={pipeline} onStatusChange={handleStatusChange} canCreateMatching={canCreateMatching} />
           ) : (
             <PipelineList needs={pipeline} onStatusChange={handleStatusChange} cursus={cursus} profiles={profiles} />
           )
@@ -732,6 +756,7 @@ export function PipelineClient({
         onConfirm={handleConfirm}
         onDelete={handlePendingDelete}
         onCancel={() => setPending(null)}
+        canDelete={canDelete}
       />
 
       <SelectRetenuModal

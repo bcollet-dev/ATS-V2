@@ -2,6 +2,7 @@ import {
   pgTable,
   uuid,
   text,
+  integer,
   timestamp,
   jsonb,
   unique,
@@ -39,6 +40,10 @@ export const companies = pgTable(
     legalRepFirstName: text("legal_rep_first_name"),
     legalRepLastName: text("legal_rep_last_name"),
 
+    // Ypareo
+    ypareoEntrepriseId: text("ypareo_entreprise_id"),
+    ypareoTypeEmployeur: integer("ypareo_type_employeur").default(12),
+
     // Données registre public (INSEE/Pappers)
     publicRegistryData: jsonb("public_registry_data"),
     registrySyncedAt: timestamp("registry_synced_at", { withTimezone: true }),
@@ -56,6 +61,7 @@ export const companies = pgTable(
     unique("companies_siren_unique").on(t.siren),
     index("companies_city_idx").on(t.city),
     index("companies_deleted_at_idx").on(t.deletedAt),
+    index("companies_directory_idx").on(t.deletedAt, t.name),
   ]
 );
 
@@ -81,5 +87,6 @@ export const companyContacts = pgTable(
   },
   (t) => [
     index("company_contacts_company_idx").on(t.companyId),
+    index("company_contacts_company_active_idx").on(t.companyId, t.deletedAt, t.firstName),
   ]
 );

@@ -1,15 +1,25 @@
 "use server";
 
 import { requireAuth } from "@/lib/auth";
+import { can, type AppRole } from "@/lib/permissions";
 import { db } from "@/db";
 import { matchings, candidates, needs, companies, cursus, documents, profiles, companyContacts, mailTemplates } from "@/db/schema";
 import { eq, isNull, and, asc, notInArray, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { createStorageClient } from "@/lib/supabase/server";
 import { logActivityEvent } from "@/lib/activity";
 import { substituteVariables, stripHtml, type MailVariableContext } from "@/lib/mail-variables";
 import { renderSignatureHtml } from "@/lib/signature";
 import { getGmailAccessToken, sendGmailMessage } from "@/lib/gmail-api";
+import { decryptSecret } from "@/lib/secret-box";
+import {
+  canCandidateBeMatched,
+  canNeedBeMatched,
+  deriveCandidateStatusFromPropositions,
+  deriveNeedStatusFromPropositions,
+  MATCHING_ALLOWED_CANDIDATE_STATUSES,
+  MATCHING_ALLOWED_NEED_STATUSES,
+} from "./rules";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -154,6 +164,7 @@ export async function loadAvailableCandidatesForNeed(needId: string): Promise<Ca
     .where(
       and(
         isNull(candidates.deletedAt),
+        inArray(candidates.status, [...MATCHING_ALLOWED_CANDIDATE_STATUSES] as never[]),
         ...(excludeIds.length > 0 ? [notInArray(candidates.id, excludeIds)] : [])
       )
     )
@@ -191,6 +202,7 @@ export async function loadAvailableNeedsForCandidate(candidateId: string): Promi
       and(
         isNull(needs.deletedAt),
         isNull(companies.deletedAt),
+        inArray(needs.status, [...MATCHING_ALLOWED_NEED_STATUSES] as never[]),
         ...(excludeIds.length > 0 ? [notInArray(needs.id, excludeIds)] : [])
       )
     )
@@ -209,11 +221,8 @@ export async function loadAvailableNeedsForCandidate(candidateId: string): Promi
 
 // Statuts éligibles au recalcul automatique depuis les matchings
 const SYNC_ALLOWED_NEED_STATUSES = new Set([
-  "need_in_progress", "a_shooter", "cv_envoye", "interview", "waiting_fre",
+  "need_in_progress", "a_shooter", "cv_envoye", "interview", "waiting_fre", "client",
 ]);
-
-// Statuts qui ne doivent pas être downgradés vers need_in_progress quand aucun matching avancé
-const NO_DOWNGRADE_STATUSES = new Set(["a_shooter", "cv_envoye"]);
 
 export async function syncNeedStatusFromMatchings(needId: string): Promise<void> {
   const [needRow] = await db
@@ -223,37 +232,20 @@ export async function syncNeedStatusFromMatchings(needId: string): Promise<void>
 
   if (!needRow || !SYNC_ALLOWED_NEED_STATUSES.has(needRow.status)) return;
 
-  // If a winner (placed) already exists, don't auto-sync
-  const [winner] = await db
-    .select({ id: matchings.id })
-    .from(matchings)
-    .where(and(eq(matchings.needId, needId), eq(matchings.propositionStatus, "placed")))
-    .limit(1);
-  if (winner) return;
-
-  // Active propositions: not eliminated, not placed, not frozen
   const actives = await db
     .select({ propositionStatus: matchings.propositionStatus })
     .from(matchings)
     .where(
       and(
         eq(matchings.needId, needId),
-        notInArray(matchings.propositionStatus, ["not_retained", "placed"]),
+        notInArray(matchings.propositionStatus, ["not_retained"]),
         eq(matchings.isFrozen, false)
       )
     );
 
-  let targetStatus: string;
-  if (actives.some((m) => m.propositionStatus === "waiting_fre")) {
-    targetStatus = "waiting_fre";
-  } else if (actives.some((m) => m.propositionStatus === "interview")) {
-    targetStatus = "interview";
-  } else {
-    // Don't downgrade from a_shooter or cv_envoye — those are set intentionally
-    targetStatus = NO_DOWNGRADE_STATUSES.has(needRow.status)
-      ? needRow.status
-      : "need_in_progress";
-  }
+  const targetStatus = deriveNeedStatusFromPropositions(
+    actives.map((m) => m.propositionStatus)
+  );
 
   if (targetStatus !== needRow.status) {
     await db
@@ -264,17 +256,51 @@ export async function syncNeedStatusFromMatchings(needId: string): Promise<void>
   }
 }
 
+const SYNC_ALLOWED_CANDIDATE_STATUSES = new Set([
+  "admissible", "company_interview", "waiting_fre", "placed",
+]);
+
+export async function syncCandidateStatusFromMatchings(candidateId: string): Promise<void> {
+  const [candidateRow] = await db
+    .select({ status: candidates.status })
+    .from(candidates)
+    .where(eq(candidates.id, candidateId));
+
+  if (!candidateRow || !SYNC_ALLOWED_CANDIDATE_STATUSES.has(candidateRow.status)) return;
+
+  const actives = await db
+    .select({ propositionStatus: matchings.propositionStatus })
+    .from(matchings)
+    .where(
+      and(
+        eq(matchings.candidateId, candidateId),
+        notInArray(matchings.propositionStatus, ["not_retained"]),
+        eq(matchings.isFrozen, false)
+      )
+    );
+
+  const targetStatus = deriveCandidateStatusFromPropositions(
+    actives.map((m) => m.propositionStatus)
+  );
+
+  if (targetStatus !== candidateRow.status) {
+    await db
+      .update(candidates)
+      .set({ status: targetStatus as never, updatedAt: new Date() })
+      .where(eq(candidates.id, candidateId));
+    revalidatePath("/candidats");
+  }
+}
+
 // ─── Mutations ────────────────────────────────────────────────────────────────
 
 type CreateResult =
   | { success: true; data: { id: string } }
   | { success: false; error: string };
 
-// Statuts besoin "bas" — passage automatique à a_shooter dès qu'un matching est créé
-const LOW_NEED_STATUSES = ["ad_chase", "prospect", "need_in_progress"] as const;
-
 export async function createMatching(candidateId: string, needId: string): Promise<CreateResult> {
   const actor = await requireAuth();
+  if (!can(actor.role as AppRole, "matchings:create")) return { success: false, error: "Non autorisé" };
   const existing = await db
     .select({ id: matchings.id })
     .from(matchings)
@@ -283,18 +309,23 @@ export async function createMatching(candidateId: string, needId: string): Promi
 
   const [needRow, candidateRow] = await Promise.all([
     db.select({ status: needs.status }).from(needs).where(eq(needs.id, needId)).limit(1),
-    db.select({ firstName: candidates.firstName, lastName: candidates.lastName }).from(candidates).where(eq(candidates.id, candidateId)).limit(1),
+    db.select({ firstName: candidates.firstName, lastName: candidates.lastName, status: candidates.status }).from(candidates).where(eq(candidates.id, candidateId)).limit(1),
   ]);
+
+  if (!candidateRow[0] || !canCandidateBeMatched(candidateRow[0].status)) {
+    return { success: false, error: "Le candidat doit être au moins Admissible pour être proposé sur un besoin." };
+  }
+
+  if (!needRow[0] || !canNeedBeMatched(needRow[0].status)) {
+    return { success: false, error: "Le besoin doit etre au moins en statut Besoin en cours pour recevoir un candidat." };
+  }
 
   const [created] = await db.insert(matchings).values({ candidateId, needId }).returning({ id: matchings.id });
 
-  // Bump need to a_shooter if currently at a low status
-  if (needRow[0] && (LOW_NEED_STATUSES as readonly string[]).includes(needRow[0].status)) {
-    await db
-      .update(needs)
-      .set({ status: "a_shooter", updatedAt: new Date() })
-      .where(eq(needs.id, needId));
-  }
+  await Promise.all([
+    syncCandidateStatusFromMatchings(candidateId),
+    syncNeedStatusFromMatchings(needId),
+  ]);
 
   const name = candidateRow[0] ? `${candidateRow[0].firstName} ${candidateRow[0].lastName}` : "Candidat";
   await logActivityEvent({
@@ -319,6 +350,7 @@ export async function updateMatchingStatus(
   const [row] = await db
     .select({
       needId: matchings.needId,
+      candidateId: matchings.candidateId,
       firstName: candidates.firstName,
       lastName: candidates.lastName,
     })
@@ -336,7 +368,10 @@ export async function updateMatchingStatus(
     .where(eq(matchings.id, id));
 
   if (row) {
-    await syncNeedStatusFromMatchings(row.needId);
+    await Promise.all([
+      syncCandidateStatusFromMatchings(row.candidateId),
+      syncNeedStatusFromMatchings(row.needId),
+    ]);
     const statusLabels: Record<string, string> = {
       cv_sent: "CV envoyé", interview: "Entretien prévu",
       waiting_fre: "Retenu", not_retained: "Non retenu", placed: "Placé",
@@ -359,6 +394,7 @@ export async function markMatchingWinner(matchingId: string): Promise<void> {
   const [row] = await db
     .select({
       needId: matchings.needId,
+      candidateId: matchings.candidateId,
       firstName: candidates.firstName,
       lastName: candidates.lastName,
     })
@@ -384,6 +420,11 @@ export async function markMatchingWinner(matchingId: string): Promise<void> {
       )
     );
 
+  await Promise.all([
+    syncCandidateStatusFromMatchings(row.candidateId),
+    syncNeedStatusFromMatchings(row.needId),
+  ]);
+
   await logActivityEvent({
     needId: row.needId,
     actorId: actor.id,
@@ -400,6 +441,7 @@ export async function deleteMatching(id: string): Promise<void> {
   const [row] = await db
     .select({
       needId: matchings.needId,
+      candidateId: matchings.candidateId,
       firstName: candidates.firstName,
       lastName: candidates.lastName,
     })
@@ -410,7 +452,10 @@ export async function deleteMatching(id: string): Promise<void> {
   await db.delete(matchings).where(eq(matchings.id, id));
 
   if (row) {
-    await syncNeedStatusFromMatchings(row.needId);
+    await Promise.all([
+      syncCandidateStatusFromMatchings(row.candidateId),
+      syncNeedStatusFromMatchings(row.needId),
+    ]);
     await logActivityEvent({
       needId: row.needId,
       actorId: actor.id,
@@ -427,7 +472,16 @@ export async function deleteMatching(id: string): Promise<void> {
 // Revalidate need-specific path
 export async function deleteAllMatchingsForNeed(needId: string): Promise<void> {
   await requireAuth();
+  const rows = await db
+    .select({ candidateId: matchings.candidateId })
+    .from(matchings)
+    .where(eq(matchings.needId, needId));
   await db.delete(matchings).where(eq(matchings.needId, needId));
+  const candidateIds = [...new Set(rows.map((r) => r.candidateId as string))];
+  await Promise.all([
+    syncNeedStatusFromMatchings(needId),
+    ...candidateIds.map(syncCandidateStatusFromMatchings),
+  ]);
   revalidatePath("/besoins");
   revalidatePath("/candidats");
   revalidatePath("/matching");
@@ -441,7 +495,10 @@ export async function deleteAllMatchingsForCandidate(candidateId: string): Promi
     .where(eq(matchings.candidateId, candidateId));
   await db.delete(matchings).where(eq(matchings.candidateId, candidateId));
   const needIds = [...new Set(rows.map((r) => r.needId as string))];
-  await Promise.all(needIds.map(syncNeedStatusFromMatchings));
+  await Promise.all([
+    syncCandidateStatusFromMatchings(candidateId),
+    ...needIds.map(syncNeedStatusFromMatchings),
+  ]);
   revalidatePath("/besoins");
   revalidatePath("/candidats");
   revalidatePath("/matching");
@@ -479,26 +536,47 @@ export async function batchCreateMatchings(
     );
 
   const existingSet = new Set(existingPairs.map((p) => `${p.candidateId}:${p.needId}`));
-  const newPairs = pairs.filter((p) => !existingSet.has(`${p.candidateId}:${p.needId}`));
+  const allowedCandidateRows = await db
+    .select({ id: candidates.id })
+    .from(candidates)
+    .where(
+      and(
+        inArray(candidates.id, candidateIds),
+        isNull(candidates.deletedAt),
+        inArray(candidates.status, [...MATCHING_ALLOWED_CANDIDATE_STATUSES] as never[])
+      )
+    );
+  const allowedCandidateIds = new Set(allowedCandidateRows.map((c) => c.id));
+  const allowedNeedRows = await db
+    .select({ id: needs.id })
+    .from(needs)
+    .where(
+      and(
+        inArray(needs.id, needIds),
+        isNull(needs.deletedAt),
+        inArray(needs.status, [...MATCHING_ALLOWED_NEED_STATUSES] as never[])
+      )
+    );
+  const allowedNeedIds = new Set(allowedNeedRows.map((n) => n.id));
+
+  const newPairs = pairs.filter(
+    (p) =>
+      allowedCandidateIds.has(p.candidateId) &&
+      allowedNeedIds.has(p.needId) &&
+      !existingSet.has(`${p.candidateId}:${p.needId}`)
+  );
 
   if (newPairs.length > 0) {
     await db.insert(matchings).values(
       newPairs.map((p) => ({ candidateId: p.candidateId, needId: p.needId }))
     );
     const affectedNeedIds = [...new Set(newPairs.map((p) => p.needId))];
+    const affectedCandidateIds = [...new Set(newPairs.map((p) => p.candidateId))];
 
-    // Bump needs with low status to a_shooter
-    await db
-      .update(needs)
-      .set({ status: "a_shooter", updatedAt: new Date() })
-      .where(
-        and(
-          inArray(needs.id, affectedNeedIds),
-          inArray(needs.status, [...LOW_NEED_STATUSES] as never[])
-        )
-      );
-
-    await Promise.all(affectedNeedIds.map(syncNeedStatusFromMatchings));
+    await Promise.all([
+      ...affectedNeedIds.map(syncNeedStatusFromMatchings),
+      ...affectedCandidateIds.map(syncCandidateStatusFromMatchings),
+    ]);
   }
 
   revalidatePath("/matching");
@@ -571,10 +649,7 @@ export async function loadCandidatesForMatching(): Promise<MatchingCandidateRow[
     .where(
       and(
         isNull(candidates.deletedAt),
-        notInArray(candidates.status, [
-          "to_call", "in_progress", "no_response", "interview", "pvpp",
-          "temporary_refusal", "definitive_refusal",
-        ])
+        inArray(candidates.status, [...MATCHING_ALLOWED_CANDIDATE_STATUSES] as never[])
       )
     )
     .orderBy(asc(candidates.firstName));
@@ -643,7 +718,6 @@ export type EmailModalTemplate = {
 export type EmailModalCVInfo = {
   documentId: string;
   fileName: string;
-  storagePath: string;
 };
 
 export type EmailModalData = {
@@ -686,7 +760,7 @@ export async function loadEmailModalData(
       .orderBy(asc(mailTemplates.name)),
     candidateIds.length > 0
       ? db
-          .select({ candidateId: documents.candidateId, id: documents.id, fileName: documents.fileName, storagePath: documents.storagePath })
+          .select({ candidateId: documents.candidateId, id: documents.id, fileName: documents.fileName })
           .from(documents)
           .where(and(inArray(documents.candidateId, candidateIds), eq(documents.documentType, "cv")))
       : Promise.resolve([]),
@@ -713,7 +787,6 @@ export async function loadEmailModalData(
     cvByCandidate[r.candidateId as string] = {
       documentId: r.id,
       fileName: r.fileName,
-      storagePath: r.storagePath,
     };
   }
 
@@ -760,7 +833,7 @@ export async function sendMatchingEmails(params: {
       results: params.emails.map((e) => ({
         needId: e.needId,
         success: false,
-        error: "Token Gmail non disponible. Reconnectez-vous avec Google pour autoriser l'envoi d'emails.",
+        error: "Gmail n'est pas connecte. Cliquez sur Connecter Gmail dans Trames mail, puis retentez l'envoi.",
       })),
     };
   }
@@ -817,7 +890,7 @@ export async function sendMatchingEmails(params: {
   const docMap = new Map(docRows.map((r) => [r.id, r]));
 
   // Download files from Supabase Storage
-  const supabase = await createClient();
+  const supabase = await createStorageClient();
   const fileCache = new Map<string, Buffer>();
   await Promise.all(
     docRows.map(async (doc) => {
@@ -833,10 +906,12 @@ export async function sendMatchingEmails(params: {
     accessToken = await getGmailAccessToken({
       clientId,
       clientSecret,
-      refreshToken: user.googleRefreshToken,
+      refreshToken: decryptSecret(user.googleRefreshToken),
     });
   } catch (err) {
-    const error = err instanceof Error ? err.message : "Connexion Gmail invalide. Reconnectez votre compte Gmail.";
+    const error = err instanceof Error
+      ? `${err.message} Reconnectez Gmail puis retentez l'envoi.`
+      : "Connexion Gmail invalide. Reconnectez Gmail puis retentez l'envoi.";
     return {
       results: params.emails.map((e) => ({
         needId: e.needId,
@@ -990,22 +1065,6 @@ export async function sendMatchingEmails(params: {
         }
       }
     }
-  }
-
-  // Auto-set cv_envoye for needs that were successfully emailed from a_shooter status
-  const successNeedIds = results.filter((r) => r.success).map((r) => r.needId);
-  if (successNeedIds.length > 0) {
-    await db
-      .update(needs)
-      .set({ status: "cv_envoye", updatedAt: new Date() })
-      .where(
-        and(
-          inArray(needs.id, successNeedIds),
-          eq(needs.status, "a_shooter")
-        )
-      );
-    revalidatePath("/besoins");
-    revalidatePath("/matching");
   }
 
   return { results };

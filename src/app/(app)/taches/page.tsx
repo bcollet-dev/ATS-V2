@@ -50,7 +50,7 @@ export default async function TachesPage() {
 
   return (
     <div className="p-6 max-w-6xl">
-      <MarkNotificationsRead userId={user.id} />
+      <MarkNotificationsRead />
 
       <div className="mb-6">
         <h1 className="text-2xl font-semibold">Tâches</h1>

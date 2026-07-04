@@ -52,7 +52,7 @@ export function BlocDocuments({
   }
 
   async function handleDownload(doc: CompanyDocument) {
-    const url = await getSignedDocumentUrl(doc.storagePath);
+    const url = await getSignedDocumentUrl(doc.id);
     if (!url) { toast.error("Impossible de générer le lien de téléchargement"); return; }
     const a = document.createElement("a");
     a.href = url;
@@ -63,7 +63,7 @@ export function BlocDocuments({
 
   async function handleDelete(doc: CompanyDocument) {
     setDeletingId(doc.id);
-    const result = await deleteCompanyDocument(doc.id, companyId, doc.storagePath);
+    const result = await deleteCompanyDocument(doc.id, companyId);
     setDeletingId(null);
     if (!result.success) { toast.error(result.error); return; }
     setDocs((prev) => prev.filter((d) => d.id !== doc.id));

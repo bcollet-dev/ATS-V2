@@ -11,6 +11,7 @@ import { archiveCompany } from "./actions";
 export function CompanyHeader({
   company,
   canEdit,
+  canDelete,
 }: {
   company: {
     id: string;
@@ -22,6 +23,7 @@ export function CompanyHeader({
     deletedAt: string | null;
   };
   canEdit: boolean;
+  canDelete: boolean;
 }) {
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -73,7 +75,7 @@ export function CompanyHeader({
         </div>
       </div>
 
-      {canEdit && !company.deletedAt && (
+      {canDelete && !company.deletedAt && (
         <div className="relative shrink-0">
           <Button
             variant="ghost"

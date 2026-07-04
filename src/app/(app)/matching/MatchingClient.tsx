@@ -771,7 +771,7 @@ export function MatchingClient({
 
   // Floating banner content
   const bannerContent = showBanner && mounted ? createPortal(
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
+    <div className="fixed bottom-24 left-1/2 z-50 -translate-x-1/2 lg:bottom-6">
       <div className="flex items-center gap-3 bg-foreground text-background rounded-xl shadow-xl px-5 py-3 text-sm font-medium">
         <span className="tabular-nums">
           {selectedCandIds.size > 0 && `${selectedCandIds.size} candidat${selectedCandIds.size > 1 ? "s" : ""} · `}
@@ -818,9 +818,9 @@ export function MatchingClient({
 
   return (
     <>
-      <div className="flex h-full overflow-hidden border-t">
+      <div className="flex h-full flex-col overflow-hidden border-t md:flex-row">
         {/* ── Left column — Candidats ── */}
-        <div className="flex flex-col flex-1 min-w-0 min-h-0">
+        <div className="flex min-h-[45dvh] min-w-0 flex-1 flex-col md:min-h-0">
           {/* Header */}
           <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 shrink-0">
             <Users className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -872,7 +872,7 @@ export function MatchingClient({
         <div className="w-px bg-border shrink-0" />
 
         {/* ── Right column — Besoins ── */}
-        <div className="flex flex-col flex-1 min-w-0 min-h-0">
+        <div className="flex min-h-[45dvh] min-w-0 flex-1 flex-col border-t md:min-h-0 md:border-t-0 md:border-l">
           {/* Header */}
           <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 shrink-0">
             <Briefcase className="h-4 w-4 text-muted-foreground shrink-0" />

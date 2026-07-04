@@ -7,7 +7,8 @@ import { getGmailAccessToken, sendGmailMessage } from "@/lib/gmail-api";
 import { logActivityEvent } from "@/lib/activity";
 import { substituteVariables, stripHtml, type MailVariableContext } from "@/lib/mail-variables";
 import { renderSignatureHtml } from "@/lib/signature";
-import { createClient } from "@/lib/supabase/server";
+import { createStorageClient } from "@/lib/supabase/server";
+import { decryptSecret } from "@/lib/secret-box";
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
@@ -545,7 +546,7 @@ async function loadAttachmentFiles(
     return { success: false, error: "Un document joint est introuvable sur cette fiche." };
   }
 
-  const supabase = await createClient();
+  const supabase = await createStorageClient();
   const attachments: { filename: string; content: Buffer }[] = [];
   for (const row of rows) {
     const { data, error } = await supabase.storage.from("documents").download(row.storagePath);
@@ -567,7 +568,6 @@ export async function uploadEntityMailAttachment(
   formData: FormData
 ): Promise<{ success: true; document: EntityMailDocument } | { success: false; error: string }> {
   const actor = await requireAuth();
-  if (actor.role === "direction") return { success: false, error: "Non autorisé" };
 
   const file = formData.get("file") as File | null;
   if (!file || file.size === 0) return { success: false, error: "Aucun fichier sélectionné" };
@@ -581,7 +581,7 @@ export async function uploadEntityMailAttachment(
   const extension = getExtension(file.name, file.type);
   const storagePath = `${getStoragePrefix(kind, entityId)}/${crypto.randomUUID()}.${extension}`;
   const bytes = await file.arrayBuffer();
-  const supabase = await createClient();
+  const supabase = await createStorageClient();
   const { error: uploadError } = await supabase.storage
     .from("documents")
     .upload(storagePath, bytes, { contentType: file.type, upsert: false });
@@ -637,7 +637,7 @@ export async function sendEntityMail(
     return { success: false, error: "Configuration Google manquante." };
   }
   if (!user.googleRefreshToken) {
-    return { success: false, error: "Gmail n'est pas connecte sur votre compte." };
+    return { success: false, error: "Gmail n'est pas connecte. Cliquez sur Connecter Gmail dans le bloc Messagerie ou dans Trames mail, puis retentez l'envoi." };
   }
 
   const entityContext = await buildEntityContext(input.kind, input.entityId, to);
@@ -648,12 +648,14 @@ export async function sendEntityMail(
     accessToken = await getGmailAccessToken({
       clientId,
       clientSecret,
-      refreshToken: user.googleRefreshToken,
+      refreshToken: decryptSecret(user.googleRefreshToken),
     });
   } catch (err) {
     return {
       success: false,
-      error: err instanceof Error ? err.message : "Connexion Gmail invalide.",
+      error: err instanceof Error
+        ? `${err.message} Reconnectez Gmail puis retentez l'envoi.`
+        : "Connexion Gmail invalide. Reconnectez Gmail puis retentez l'envoi.",
     };
   }
 

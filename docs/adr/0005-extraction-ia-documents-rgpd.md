@@ -34,3 +34,10 @@ Les fichiers bruts (CV, CNI, carte vitale) contiennent des données plus sensibl
 ## Conséquence sur le développement
 
 La fonctionnalité peut être développée techniquement (upload, appel API, mapping, validation humaine) mais **ne doit pas être activée en production** avant que les points ① et ② soient tranchés. Un flag d'activation par variable d'environnement (`ANTHROPIC_API_KEY` vide = fonctionnalité désactivée) permet de déployer sans exposer.
+## Amendement 2026-07-04
+
+Le cadrage produit du lancement retient une extraction automatique a l'upload pour les documents eligibles, avec validation humaine obligatoire avant toute ecriture metier. Les champs extraits sont presentes sous forme de propositions cochables/decochables; les champs decoches ne sont pas appliques.
+
+Cette evolution ne vaut pas autorisation DPO. En production, l'activation requiert explicitement `AI_EXTRACTION_ENABLED=true`, `ANTHROPIC_API_KEY` et `AI_EXTRACTION_DPO_APPROVED=true`. Sans cette validation de configuration, l'extraction IA reste desactivee.
+
+Le NIR extrait d'une carte vitale est un cas particulier: il ne doit pas etre stocke en clair dans les donnees d'attente. Il est conserve chiffre, affiche masque, et applique sur la fiche candidat uniquement si l'utilisateur habilite coche volontairement le champ.

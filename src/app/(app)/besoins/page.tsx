@@ -1,4 +1,5 @@
 import { requireAuth } from "@/lib/auth";
+import { can, type AppRole } from "@/lib/permissions";
 import { db } from "@/db";
 import { profiles, companies } from "@/db/schema";
 import { eq, isNull, and, asc } from "drizzle-orm";
@@ -7,7 +8,7 @@ import { loadPipelineNeeds } from "./actions";
 import { PipelineClient } from "./PipelineClient";
 
 export default async function BesoinsPage() {
-  const [, pipelineNeeds, cursus, activeProfiles, activeCompanies] = await Promise.all([
+  const [actor, pipelineNeeds, cursus, activeProfiles, activeCompanies] = await Promise.all([
     requireAuth(),
     loadPipelineNeeds(),
     getActiveCursus(),
@@ -23,12 +24,16 @@ export default async function BesoinsPage() {
       .orderBy(asc(companies.name)),
   ]);
 
+  const role = actor.role as AppRole;
+
   return (
     <PipelineClient
       needs={pipelineNeeds}
       cursus={cursus}
       profiles={activeProfiles}
       companies={activeCompanies}
+      canCreateMatching={can(role, "matchings:create")}
+      canDelete={can(role, "needs:delete")}
     />
   );
 }

@@ -50,5 +50,9 @@ export const documents = pgTable(
     index("documents_candidate_idx").on(t.candidateId),
     index("documents_company_idx").on(t.companyId),
     index("documents_need_idx").on(t.needId),
+    index("documents_candidate_type_idx").on(t.candidateId, t.documentType, t.createdAt),
+    index("documents_company_type_idx").on(t.companyId, t.documentType, t.createdAt),
+    index("documents_need_type_idx").on(t.needId, t.documentType, t.createdAt),
+    index("documents_extraction_status_idx").on(t.extractionStatus, t.createdAt),
   ]
 );

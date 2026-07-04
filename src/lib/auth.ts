@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { db } from "@/db";
 import { profiles } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { redirect } from "next/navigation";
 
 export async function getCurrentUser() {
@@ -13,7 +13,11 @@ export async function getCurrentUser() {
   if (!user) return null;
 
   const profile = await db.query.profiles.findFirst({
-    where: eq(profiles.id, user.id),
+    where: and(
+      eq(profiles.id, user.id),
+      eq(profiles.active, true),
+      isNull(profiles.deletedAt),
+    ),
   });
 
   return profile ?? null;

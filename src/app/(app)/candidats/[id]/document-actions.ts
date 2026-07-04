@@ -9,10 +9,11 @@ import {
   candidateExperiences,
   candidateFormations,
 } from "@/db/schema";
-import { eq, and, desc } from "drizzle-orm";
-import { createClient } from "@/lib/supabase/server";
+import { eq, and, desc, isNull } from "drizzle-orm";
+import { createStorageClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import { encryptNir } from "@/lib/nir";
+import { decryptNir, encryptNir, maskNir } from "@/lib/nir";
+import { resolveFrenchBirthDepartment } from "@/lib/birth-department";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -22,7 +23,6 @@ export type CandidateDoc = {
   id: string;
   documentType: string;
   fileName: string;
-  storagePath: string;
   mimeType: string;
   fileSize: number;
   extractionStatus: string | null;
@@ -47,7 +47,6 @@ export async function listCandidateDocuments(candidateId: string): Promise<Candi
       id: documents.id,
       documentType: documents.documentType,
       fileName: documents.fileName,
-      storagePath: documents.storagePath,
       mimeType: documents.mimeType,
       fileSize: documents.fileSize,
       extractionStatus: documents.extractionStatus,
@@ -61,7 +60,6 @@ export async function listCandidateDocuments(candidateId: string): Promise<Candi
     id: r.id,
     documentType: r.documentType,
     fileName: r.fileName,
-    storagePath: r.storagePath,
     mimeType: r.mimeType,
     fileSize: r.fileSize,
     extractionStatus: r.extractionStatus ?? null,
@@ -79,10 +77,21 @@ export async function listCandidateDocuments(candidateId: string): Promise<Candi
 
 // ─── Signed URL ───────────────────────────────────────────────────────────────
 
-export async function getSignedCandidateDocumentUrl(storagePath: string): Promise<string | null> {
+export async function getSignedCandidateDocumentUrl(documentId: string): Promise<string | null> {
   await requireAuth();
-  const supabase = await createClient();
-  const { data } = await supabase.storage.from("documents").createSignedUrl(storagePath, 3600);
+  const [row] = await db
+    .select({
+      storagePath: documents.storagePath,
+    })
+    .from(documents)
+    .innerJoin(candidates, eq(documents.candidateId, candidates.id))
+    .where(and(eq(documents.id, documentId), isNull(candidates.deletedAt)))
+    .limit(1);
+
+  if (!row) return null;
+
+  const supabase = await createStorageClient();
+  const { data } = await supabase.storage.from("documents").createSignedUrl(row.storagePath, 3600);
   return data?.signedUrl ?? null;
 }
 
@@ -91,9 +100,14 @@ export async function getSignedCandidateDocumentUrl(storagePath: string): Promis
 export async function getDocumentExtraction(documentId: string): Promise<Record<string, unknown> | null> {
   await requireAuth();
   const [row] = await db
-    .select({ extractedData: documents.extractedData })
+    .select({
+      extractedData: documents.extractedData,
+    })
     .from(documents)
-    .where(eq(documents.id, documentId));
+    .innerJoin(candidates, eq(documents.candidateId, candidates.id))
+    .where(and(eq(documents.id, documentId), isNull(candidates.deletedAt)))
+    .limit(1);
+  if (!row) return null;
   return (row?.extractedData as Record<string, unknown> | null) ?? null;
 }
 
@@ -124,6 +138,55 @@ const ALLOWED_TYPES: Record<DocType, Set<string>> = {
 
 const MAX_SIZE = 20 * 1024 * 1024;
 const UPSERT_TYPES: DocType[] = ["cv", "cni", "carte_vitale"];
+const PROTECTED_EXTRACTION_KEY = "_protected";
+
+function isAiExtractionEnabled(): boolean {
+  return process.env.AI_EXTRACTION_ENABLED === "true";
+}
+
+function objectValue(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function normalizedNir(value: unknown) {
+  if (typeof value !== "string") return null;
+  const digits = value.replace(/\D/g, "");
+  return digits.length >= 13 ? digits.slice(0, 13) : null;
+}
+
+function protectSensitiveExtractionData(
+  documentType: Exclude<DocType, "other">,
+  data: Record<string, unknown>,
+) {
+  if (documentType !== "carte_vitale") return data;
+
+  const nir = normalizedNir(data.nir);
+  if (!nir) return data;
+
+  const { encrypted, iv } = encryptNir(nir);
+  return {
+    ...data,
+    nir: maskNir(nir),
+    [PROTECTED_EXTRACTION_KEY]: {
+      ...(objectValue(data[PROTECTED_EXTRACTION_KEY]) ?? {}),
+      nirEncrypted: encrypted.toString("base64"),
+      nirIv: iv.toString("base64"),
+      nirMasked: maskNir(nir),
+    },
+  };
+}
+
+function readProtectedNir(data: Record<string, unknown>) {
+  const protectedData = objectValue(data[PROTECTED_EXTRACTION_KEY]);
+  const encrypted = protectedData?.nirEncrypted;
+  const iv = protectedData?.nirIv;
+  if (typeof encrypted === "string" && typeof iv === "string") {
+    return decryptNir(Buffer.from(encrypted, "base64"), Buffer.from(iv, "base64"));
+  }
+  return normalizedNir(data.nir);
+}
 
 function getExt(fileName: string, mimeType: string): string {
   const fromName = fileName.split(".").pop()?.toLowerCase();
@@ -144,7 +207,6 @@ export async function uploadCandidateDocument(
   | { success: false; error: string }
 > {
   const actor = await requireAuth();
-  if (actor.role === "direction") return { success: false, error: "Non autorisé" };
 
   const file = formData.get("file") as File | null;
   if (!file || file.size === 0) return { success: false, error: "Aucun fichier sélectionné" };
@@ -159,7 +221,7 @@ export async function uploadCandidateDocument(
   const uuid = crypto.randomUUID();
   const storagePath = `candidates/${candidateId}/${uuid}.${ext}`;
 
-  const supabase = await createClient();
+  const supabase = await createStorageClient();
   const bytes = await file.arrayBuffer();
   const buffer = Buffer.from(bytes);
 
@@ -171,6 +233,8 @@ export async function uploadCandidateDocument(
 
   let documentId: string;
   const now = new Date();
+  const extractionEnabled = isAiExtractionEnabled();
+  const initialExtractionStatus = documentType === "other" || !extractionEnabled ? null : "pending";
 
   if (UPSERT_TYPES.includes(documentType)) {
     const [existing] = await db
@@ -181,11 +245,15 @@ export async function uploadCandidateDocument(
           eq(documents.candidateId, candidateId),
           eq(documents.documentType, documentType as never)
         )
-      )
+    )
       .limit(1);
 
     if (existing) {
-      await supabase.storage.from("documents").remove([existing.storagePath]);
+      const { error: removeError } = await supabase.storage.from("documents").remove([existing.storagePath]);
+      if (removeError) {
+        await supabase.storage.from("documents").remove([storagePath]);
+        return { success: false, error: `Erreur suppression ancien fichier : ${removeError.message}` };
+      }
       documentId = existing.id;
       await db
         .update(documents)
@@ -194,7 +262,7 @@ export async function uploadCandidateDocument(
           storagePath,
           mimeType: file.type,
           fileSize: file.size,
-          extractionStatus: "pending",
+          extractionStatus: initialExtractionStatus,
           extractedData: null as never,
           extractedAt: null,
           createdBy: actor.id,
@@ -211,7 +279,7 @@ export async function uploadCandidateDocument(
           storagePath,
           mimeType: file.type,
           fileSize: file.size,
-          extractionStatus: documentType === "other" ? null : "pending",
+          extractionStatus: initialExtractionStatus,
           createdBy: actor.id,
         })
         .returning({ id: documents.id });
@@ -227,7 +295,7 @@ export async function uploadCandidateDocument(
         storagePath,
         mimeType: file.type,
         fileSize: file.size,
-        extractionStatus: documentType === "other" ? null : "pending",
+        extractionStatus: initialExtractionStatus,
         createdBy: actor.id,
       })
       .returning({ id: documents.id });
@@ -238,14 +306,13 @@ export async function uploadCandidateDocument(
     id: documentId,
     documentType,
     fileName: file.name,
-    storagePath,
     mimeType: file.type,
     fileSize: file.size,
-    extractionStatus: documentType === "other" ? null : "pending",
+    extractionStatus: initialExtractionStatus,
     createdAt: now.toISOString(),
   };
 
-  if (documentType === "other") {
+  if (documentType === "other" || !extractionEnabled) {
     revalidatePath(`/candidats/${candidateId}`);
     return { success: true, documentId, doc: baseDoc, extractedData: null };
   }
@@ -435,17 +502,18 @@ async function runExtraction(
     if (!match) throw new Error("Aucun JSON trouvé dans la réponse");
 
     const extractedData = JSON.parse(match[0]) as Record<string, unknown>;
+    const dataForStorage = protectSensitiveExtractionData(documentType, extractedData);
 
     await db
       .update(documents)
       .set({
-        extractedData: extractedData as never,
+        extractedData: dataForStorage as never,
         extractionStatus: "done",
         extractedAt: new Date(),
       })
       .where(eq(documents.id, documentId));
 
-    return extractedData;
+    return dataForStorage;
   } catch {
     await db
       .update(documents)
@@ -461,8 +529,10 @@ export async function retryDocumentExtraction(
   documentId: string,
   candidateId: string
 ): Promise<{ success: boolean; extractedData?: Record<string, unknown>; error?: string }> {
-  const actor = await requireAuth();
-  if (actor.role === "direction") return { success: false, error: "Non autorisé" };
+  await requireAuth();
+  if (!isAiExtractionEnabled()) {
+    return { success: false, error: "Extraction IA desactivee" };
+  }
 
   const [row] = await db
     .select({
@@ -471,11 +541,18 @@ export async function retryDocumentExtraction(
       documentType: documents.documentType,
     })
     .from(documents)
-    .where(eq(documents.id, documentId));
+    .innerJoin(candidates, eq(documents.candidateId, candidates.id))
+    .where(
+      and(
+        eq(documents.id, documentId),
+        eq(documents.candidateId, candidateId),
+        isNull(candidates.deletedAt)
+      )
+    );
 
   if (!row) return { success: false, error: "Document introuvable" };
 
-  const supabase = await createClient();
+  const supabase = await createStorageClient();
   const { data, error } = await supabase.storage.from("documents").download(row.storagePath);
   if (error || !data) return { success: false, error: "Impossible de récupérer le fichier" };
 
@@ -505,14 +582,29 @@ export async function retryDocumentExtraction(
 
 export async function deleteCandidateDocument(
   documentId: string,
-  candidateId: string,
-  storagePath: string
+  candidateId: string
 ): Promise<{ success: boolean; error?: string }> {
-  const actor = await requireAuth();
-  if (actor.role === "direction") return { success: false, error: "Non autorisé" };
+  await requireAuth();
 
-  const supabase = await createClient();
-  await supabase.storage.from("documents").remove([storagePath]);
+  const [row] = await db
+    .select({ storagePath: documents.storagePath })
+    .from(documents)
+    .innerJoin(candidates, eq(documents.candidateId, candidates.id))
+    .where(
+      and(
+        eq(documents.id, documentId),
+        eq(documents.candidateId, candidateId),
+        isNull(candidates.deletedAt)
+      )
+    )
+    .limit(1);
+  if (!row) return { success: false, error: "Document introuvable" };
+
+  const supabase = await createStorageClient();
+  const { error: removeError } = await supabase.storage.from("documents").remove([row.storagePath]);
+  if (removeError) {
+    return { success: false, error: `Erreur suppression fichier : ${removeError.message}` };
+  }
 
   await db
     .delete(documents)
@@ -564,12 +656,22 @@ export async function applyDocumentExtraction(
   checkedKeys: string[]
 ): Promise<{ success: boolean; error?: string }> {
   const actor = await requireAuth();
-  if (actor.role === "direction") return { success: false, error: "Non autorisé" };
 
   const [doc] = await db
-    .select({ extractedData: documents.extractedData })
+    .select({
+      extractedData: documents.extractedData,
+      documentType: documents.documentType,
+    })
     .from(documents)
-    .where(eq(documents.id, documentId));
+    .innerJoin(candidates, eq(documents.candidateId, candidates.id))
+    .where(
+      and(
+        eq(documents.id, documentId),
+        eq(documents.candidateId, candidateId),
+        isNull(candidates.deletedAt)
+      )
+    )
+    .limit(1);
 
   if (!doc?.extractedData) return { success: false, error: "Aucune donnée extraite" };
 
@@ -595,6 +697,13 @@ export async function applyDocumentExtraction(
     candidateUpdate["lastName"] = (data.birthName as string) || null;
   }
 
+  const birthDepartment = await resolveFrenchBirthDepartment({
+    currentDepartment: candidateUpdate.birthDepartment,
+    birthCity: candidateUpdate.birthCity,
+    birthCountry: candidateUpdate.birthCountry ?? data.birthCountry,
+  });
+  if (birthDepartment) candidateUpdate.birthDepartment = birthDepartment;
+
   if (Object.keys(candidateUpdate).length > 0) {
     await db
       .update(candidates)
@@ -603,13 +712,9 @@ export async function applyDocumentExtraction(
   }
 
   // ── NIR (admin/admissions only) ──
-  if (
-    keys.has("nir") &&
-    data.nir &&
-    (actor.role === "admin" || actor.role === "admissions")
-  ) {
-    const nirStr = (data.nir as string).replace(/\s/g, "");
-    if (nirStr.length >= 13) {
+  if (keys.has("nir") && (actor.role === "admin" || actor.role === "admissions")) {
+    const nirStr = readProtectedNir(data);
+    if (nirStr) {
       const { encrypted, iv } = encryptNir(nirStr.slice(0, 13));
       await db
         .update(candidates)
@@ -618,57 +723,101 @@ export async function applyDocumentExtraction(
     }
   }
 
-  // ── Skills ──
+  // ── Skills (dédoublonnage par nom, insensible à la casse) ──
   const skills = ((data.skills as string[] | undefined) ?? []).filter(Boolean);
-  const skillsToAdd = checkedKeys
+  const skillsWanted = checkedKeys
     .filter((k) => k.startsWith("skill_"))
     .map((k) => skills[parseInt(k.replace("skill_", ""))])
     .filter((s): s is string => !!s);
 
-  if (skillsToAdd.length > 0) {
-    await db.insert(candidateSkills).values(skillsToAdd.map((name) => ({ candidateId, name })));
+  if (skillsWanted.length > 0) {
+    const existingSkills = await db
+      .select({ name: candidateSkills.name })
+      .from(candidateSkills)
+      .where(eq(candidateSkills.candidateId, candidateId));
+    const existingNames = new Set(existingSkills.map((s) => s.name.trim().toLowerCase()));
+    const newSkills = skillsWanted.filter((name) => !existingNames.has(name.trim().toLowerCase()));
+    if (newSkills.length > 0) {
+      await db.insert(candidateSkills)
+        .values(newSkills.map((name) => ({ candidateId, name: name.trim() })))
+        .onConflictDoNothing();
+    }
   }
 
-  // ── Experiences ──
+  // ── Experiences (dédoublonnage par jobTitle + company + startMonth) ──
   const experiences = ((data.experiences as ExpData[] | undefined) ?? []).filter(Boolean);
-  const expsToAdd = checkedKeys
+  const expsWanted = checkedKeys
     .filter((k) => k.startsWith("experience_"))
     .map((k) => experiences[parseInt(k.replace("experience_", ""))])
     .filter((e): e is ExpData => !!e);
 
-  if (expsToAdd.length > 0) {
-    await db.insert(candidateExperiences).values(
-      expsToAdd.map((exp) => ({
-        candidateId,
-        jobTitle: exp.jobTitle || "—",
-        company: exp.company || "—",
-        contractType: exp.contractType || null,
-        startMonth: exp.startMonth || "2024-01",
-        endMonth: exp.endMonth || null,
-        isCurrent: exp.isCurrent ?? false,
-        description: exp.description || null,
-      }))
+  if (expsWanted.length > 0) {
+    const existingExps = await db
+      .select({
+        jobTitle: candidateExperiences.jobTitle,
+        company: candidateExperiences.company,
+        startMonth: candidateExperiences.startMonth,
+      })
+      .from(candidateExperiences)
+      .where(eq(candidateExperiences.candidateId, candidateId));
+    const existingExpKeys = new Set(
+      existingExps.map((e) => `${e.jobTitle}|${e.company}|${e.startMonth}`)
     );
+    const newExps = expsWanted.filter((exp) => {
+      const key = `${exp.jobTitle || "—"}|${exp.company || "—"}|${exp.startMonth || "2024-01"}`;
+      return !existingExpKeys.has(key);
+    });
+    if (newExps.length > 0) {
+      await db.insert(candidateExperiences).values(
+        newExps.map((exp) => ({
+          candidateId,
+          jobTitle: exp.jobTitle || "—",
+          company: exp.company || "—",
+          contractType: exp.contractType || null,
+          startMonth: exp.startMonth || "2024-01",
+          endMonth: exp.endMonth || null,
+          isCurrent: exp.isCurrent ?? false,
+          description: exp.description || null,
+        }))
+      );
+    }
   }
 
-  // ── Formations ──
+  // ── Formations (dédoublonnage par title + institution + startMonth) ──
   const formations = ((data.formations as FormData2[] | undefined) ?? []).filter(Boolean);
-  const formationsToAdd = checkedKeys
+  const formationsWanted = checkedKeys
     .filter((k) => k.startsWith("formation_"))
     .map((k) => formations[parseInt(k.replace("formation_", ""))])
     .filter((f): f is FormData2 => !!f);
 
-  if (formationsToAdd.length > 0) {
-    await db.insert(candidateFormations).values(
-      formationsToAdd.map((f) => ({
-        candidateId,
-        title: f.title || "—",
-        institution: f.institution || "—",
-        startMonth: f.startMonth || "2024-01",
-        endMonth: f.endMonth || null,
-        isCurrent: f.isCurrent ?? false,
-      }))
+  if (formationsWanted.length > 0) {
+    const existingFormations = await db
+      .select({
+        title: candidateFormations.title,
+        institution: candidateFormations.institution,
+        startMonth: candidateFormations.startMonth,
+      })
+      .from(candidateFormations)
+      .where(eq(candidateFormations.candidateId, candidateId));
+    const existingFormKeys = new Set(
+      existingFormations.map((f) => `${f.title}|${f.institution}|${f.startMonth}`)
     );
+    const newFormations = formationsWanted.filter((f) => {
+      const key = `${f.title || "—"}|${f.institution || "—"}|${f.startMonth || "2024-01"}`;
+      return !existingFormKeys.has(key);
+    });
+    if (newFormations.length > 0) {
+      await db.insert(candidateFormations).values(
+        newFormations.map((f) => ({
+          candidateId,
+          title: f.title || "—",
+          institution: f.institution || "—",
+          startMonth: f.startMonth || "2024-01",
+          endMonth: f.endMonth || null,
+          isCurrent: f.isCurrent ?? false,
+        }))
+      );
+    }
   }
 
   revalidatePath(`/candidats/${candidateId}`);

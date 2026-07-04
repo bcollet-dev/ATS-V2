@@ -39,10 +39,12 @@ export function BlocRecrutement({
   candidateId,
   data,
   cursus,
+  canEdit = true,
 }: {
   candidateId: string;
   data: { cursusEnvisage: string | null; source: string | null };
   cursus: { id: string; name: string }[];
+  canEdit?: boolean;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, startSave] = useTransition();
@@ -72,7 +74,7 @@ export function BlocRecrutement({
     <section className="rounded-lg border bg-card">
       <div className="flex items-center justify-between px-5 py-3.5 border-b">
         <h2 className="text-sm font-semibold">Recrutement</h2>
-        {!isEditing && (
+        {!isEditing && canEdit && (
           <Button variant="ghost" size="sm" className="gap-1.5 h-7 text-xs" onClick={() => setIsEditing(true)}>
             <Pencil className="h-3.5 w-3.5" />
             Modifier
@@ -81,13 +83,13 @@ export function BlocRecrutement({
       </div>
 
       {!isEditing ? (
-        <dl className="px-5 py-4 grid grid-cols-2 gap-x-8 gap-y-4">
+        <dl className="grid grid-cols-1 gap-x-8 gap-y-4 px-4 py-4 sm:grid-cols-2 sm:px-5">
           <Field label="Cursus envisagé" value={data.cursusEnvisage} />
           <Field label="Source" value={data.source} />
         </dl>
       ) : (
         <form onSubmit={handleSubmit(onSubmit)} className="px-5 py-4 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="re-cursus">Cursus envisagé</Label>
               <Controller

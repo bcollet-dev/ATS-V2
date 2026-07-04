@@ -48,6 +48,11 @@ export const candidates = pgTable(
 
     // Parcours
     socialRegime: text("social_regime"),
+    situationBeforeContract: text("situation_before_contract"),
+    lastPreparedDiploma: text("last_prepared_diploma"),
+    lastClassYear: text("last_class_year"),
+    lastDiplomaTitle: text("last_diploma_title"),
+    highestDiploma: text("highest_diploma"),
 
     // Parcours souhaité
     cursusEnvisage: text("cursus_envisage"),
@@ -84,5 +89,7 @@ export const candidates = pgTable(
     index("candidates_city_idx").on(t.city),
     index("candidates_email_idx").on(t.email),
     index("candidates_deleted_at_idx").on(t.deletedAt),
+    index("candidates_pipeline_idx").on(t.deletedAt, t.status, t.firstName),
+    index("candidates_created_at_idx").on(t.createdAt),
   ]
 );

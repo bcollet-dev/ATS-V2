@@ -4,6 +4,7 @@ const DEFAULT_PRODUCTS_PATH =
   "/formation?ShowArchive=false&ShowMasque=false&ShowFormationModule=false";
 const DEFAULT_ACTIONS_PATH =
   "/parcours-action-formation?ShowArchive=false&ShowMasque=false&IsParcours=false&NombreMoisHistorique=24";
+const DEFAULT_PLACEMENT_PATH = "/contrat-apprentissage";
 const PAGE_SIZE = 500;
 
 let bearerCache: { token: string; expiresAt: number } | null = null;
@@ -30,6 +31,7 @@ export type YpareoClass = {
 };
 
 export type YpareoPlacementPayload = JsonRecord;
+export type YpareoApiPayload = JsonRecord;
 
 function requiredConfig(name: string) {
   const value = process.env[name]?.trim();
@@ -38,7 +40,7 @@ function requiredConfig(name: string) {
 }
 
 function baseUrl() {
-  return (process.env.YPAREO_BASE_URL?.trim() ?? "").replace(/\/$/, "");
+  return requiredConfig("YPAREO_BASE_URL").replace(/\/$/, "");
 }
 
 function records(payload: unknown): JsonRecord[] {
@@ -105,9 +107,90 @@ async function getBearerToken(): Promise<string> {
   return bearerCache.token;
 }
 
+const YPAREO_FIELD_LABELS: Record<string, string> = {
+  "apprenti.sexe": "civilite / sexe de l'apprenti",
+  "apprenti.nationalite": "nationalite de l'apprenti",
+  "contrat.typeContratOuAvenant": "type de contrat ou avenant",
+  "employeur.typeEmployeur": "type employeur",
+  "employeur.idEntreprise": "identifiant entreprise Ypareo",
+  "formation.diplomeOuTitreVise": "diplome ou titre vise",
+  "formation.codeRncp": "code RNCP",
+  "maitresApprentissages.maitreApprentissage1.idPersonnelEntreprise": "maitre d'apprentissage",
+};
+
+function normalizeMessage(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[’']/g, " ")
+    .toLowerCase();
+}
+
+function shortText(value: string, limit = 260) {
+  const text = value.replace(/\s+/g, " ").trim();
+  return text.length > limit ? `${text.slice(0, limit - 1)}...` : text;
+}
+
+function ypareoFieldLabel(field: string) {
+  return YPAREO_FIELD_LABELS[field] ?? field;
+}
+
+function humanizeYpareoMessage(message: string) {
+  const key = normalizeMessage(message);
+  if (key.includes("identifiant du type organisme est non renseigne")) {
+    return "Organisme de formation manquant : choisissez une classe Ypareo liee a un organisme, ou relancez la synchronisation des classes.";
+  }
+  if (key.includes("une inscription avec un statut de type contrat apprentissage doit etre presente")) {
+    return "Le cursus Ypareo doit avoir une inscription au statut Contrat d'apprentissage avant de creer le contrat.";
+  }
+  if (key.includes("entite specifiee n existe pas") || key.includes("specified entity does not exist")) {
+    return "Un identifiant Ypareo enregistre dans l'ATS n'existe plus cote Ypareo. Verifiez la personne, l'entreprise ou le cursus, puis retentez l'envoi.";
+  }
+  if (key.includes("erreur de mappage sur le champ") && key.includes("cerfa")) {
+    return "Ypareo refuse le bloc CERFA : un champ envoye n'a pas le format attendu. Verifiez les champs candidat, entreprise, contrat et remuneration dans la modale.";
+  }
+  if (key.includes("could not convert string to integer")) {
+    return "Ypareo attend un code numerique pour un champ envoye en texte. Verifiez les listes deroulantes et les champs codes dans la modale.";
+  }
+  return shortText(message);
+}
+
+function formatYpareoErrorDetail(payload: unknown) {
+  if (!payload) return "";
+  if (typeof payload === "string") return payload.slice(0, 800);
+
+  if (typeof payload === "object") {
+    const obj = payload as JsonRecord;
+    const details: string[] = [];
+    if (typeof obj.message === "string") details.push(humanizeYpareoMessage(obj.message));
+    if (typeof obj.title === "string" && details.length === 0) details.push(shortText(obj.title));
+
+    const errors = obj.errors;
+    if (errors && typeof errors === "object" && !Array.isArray(errors)) {
+      for (const [field, values] of Object.entries(errors as Record<string, unknown>).slice(0, 5)) {
+        const messages = Array.isArray(values) ? values : [values];
+        const text = messages
+          .filter((item): item is string => typeof item === "string")
+          .map(humanizeYpareoMessage)
+          .join(" ");
+        if (text) details.push(`${ypareoFieldLabel(field)} : ${shortText(text, 220)}`);
+      }
+    }
+
+    if (details.length > 0) return details.join(" ");
+  }
+
+  try {
+    return JSON.stringify(payload).slice(0, 1000);
+  } catch {
+    return "";
+  }
+}
+
 async function request(path: string, init?: RequestInit): Promise<unknown> {
   const token = await getBearerToken();
-  const response = await fetch(`${baseUrl()}/${path.replace(/^\//, "")}`, {
+  const cleanPath = path.replace(/^\//, "");
+  const response = await fetch(`${baseUrl()}/${cleanPath}`, {
     ...init,
     cache: "no-store",
     headers: {
@@ -117,8 +200,20 @@ async function request(path: string, init?: RequestInit): Promise<unknown> {
       ...init?.headers,
     },
   });
-  const payload = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(`Ypareo a répondu ${response.status}.`);
+  const rawBody = await response.text();
+  let payload: unknown = null;
+  if (rawBody) {
+    try {
+      payload = JSON.parse(rawBody) as unknown;
+    } catch {
+      payload = rawBody;
+    }
+  }
+  if (!response.ok) {
+    const detail = formatYpareoErrorDetail(payload);
+    const suffix = detail ? ` : ${detail}` : ".";
+    throw new Error(`Ypareo a repondu ${response.status} sur ${init?.method ?? "GET"} /${cleanPath}${suffix}`);
+  }
   return payload;
 }
 
@@ -188,8 +283,169 @@ export async function fetchYpareoCatalog(): Promise<{
 }
 
 export async function pushPlacementToYpareo(payload: YpareoPlacementPayload): Promise<unknown> {
-  return request(requiredConfig("YPAREO_PLACEMENT_PATH"), {
+  const placementPath = process.env.YPAREO_PLACEMENT_PATH?.trim() || DEFAULT_PLACEMENT_PATH;
+  return request(placementPath, {
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export async function createYpareoPerson(payload: YpareoApiPayload): Promise<unknown> {
+  return request("/personne", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function fetchYpareoPerson(personId: string): Promise<unknown> {
+  return request(`/personne/${personId}`, { method: "GET" });
+}
+
+export async function searchYpareoPersons(searchValue: string): Promise<unknown> {
+  const params = new URLSearchParams({
+    SearchValue: searchValue,
+    ShowArchive: "false",
+    ShowMasque: "false",
+    Skip: "0",
+    Top: "10",
+  });
+  return request(`/personne?${params.toString()}`, { method: "GET" });
+}
+
+export async function searchYpareoEntreprises(searchValue: string): Promise<unknown> {
+  const params = new URLSearchParams({
+    SearchValue: searchValue,
+    ShowArchive: "false",
+    ShowMasque: "false",
+    Skip: "0",
+    Top: "10",
+  });
+  return request(`/entreprise?${params.toString()}`, { method: "GET" });
+}
+
+export async function createYpareoEntreprise(payload: YpareoApiPayload): Promise<unknown> {
+  return request("/entreprise", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function fetchYpareoEntreprise(entrepriseId: string): Promise<unknown> {
+  return request(`/entreprise/${entrepriseId}`, { method: "GET" });
+}
+
+export async function updateYpareoEntreprise(
+  entrepriseId: string,
+  payload: YpareoApiPayload,
+): Promise<unknown> {
+  return request(`/entreprise/${entrepriseId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function fetchYpareoEntreprisePersonnel(entrepriseId: string): Promise<unknown> {
+  return request(`/entreprise/${entrepriseId}/personnel?ShowArchive=false&ShowMasque=false&Skip=0&Top=100`, {
+    method: "GET",
+  });
+}
+
+export async function createYpareoEntreprisePersonnel(
+  entrepriseId: string,
+  payload: YpareoApiPayload,
+): Promise<unknown> {
+  return request(`/entreprise/${entrepriseId}/personnel`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function searchYpareoLegalForms(searchValue: string): Promise<unknown> {
+  const params = new URLSearchParams({
+    SearchValue: searchValue,
+    ShowArchive: "false",
+    ShowMasque: "false",
+    Skip: "0",
+    Top: "20",
+  });
+  return request(`/forme-juridique?${params.toString()}`, { method: "GET" });
+}
+
+export async function searchYpareoRetirementFunds(searchValue: string): Promise<unknown> {
+  const params = new URLSearchParams({
+    SearchValue: searchValue,
+    ShowArchive: "false",
+    ShowMasque: "false",
+    Skip: "0",
+    Top: "20",
+  });
+  return request(`/caisse-retraite-complementaire?${params.toString()}`, { method: "GET" });
+}
+
+export async function fetchYpareoPersonCursus(personId: string): Promise<unknown> {
+  return request(`/personne/${personId}/cursus`, { method: "GET" });
+}
+
+export async function fetchYpareoPersonCursusDetails(
+  personId: string,
+  cursusId: string,
+): Promise<unknown> {
+  return request(`/personne/${personId}/cursus/${cursusId}`, { method: "GET" });
+}
+
+export async function createYpareoLearnerCursus(
+  personId: string,
+  payload: YpareoApiPayload,
+): Promise<unknown> {
+  return request(`/personne/${personId}/cursus`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function fetchYpareoStatuses(): Promise<unknown> {
+  return request("/statut?ShowArchive=false&ShowMasque=false&Skip=0&Top=200", { method: "GET" });
+}
+
+export async function updateYpareoInscription(
+  inscriptionId: string,
+  payload: YpareoApiPayload,
+): Promise<unknown> {
+  return request(`/inscription/${inscriptionId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function fetchYpareoPersonContracts(personId: string): Promise<unknown> {
+  return request(`/personne/${personId}/contrat-apprentissage?ShowArchive=false&ShowMasque=false&Skip=0&Top=100`, {
+    method: "GET",
+  });
+}
+
+export async function fetchYpareoPersonCursusContracts(
+  personId: string,
+  cursusId: string,
+): Promise<unknown> {
+  return request(`/personne/${personId}/cursus/${cursusId}/contrat-apprentissage?ShowArchive=false&ShowMasque=false&Skip=0&Top=100`, {
+    method: "GET",
+  });
+}
+
+export async function updateYpareoContratApprentissage(
+  contratId: string,
+  payload: YpareoApiPayload,
+): Promise<unknown> {
+  return request(`/contrat-apprentissage/${contratId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function fetchYpareoActionFormation(actionId: string): Promise<unknown> {
+  return request(`/action-formation/${actionId}`, { method: "GET" });
+}
+
+export async function fetchYpareoFormation(formationId: string): Promise<unknown> {
+  return request(`/formation/${formationId}`, { method: "GET" });
 }

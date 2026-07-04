@@ -447,6 +447,130 @@ function SortHeader({ col, label, sort, onSort }: {
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
+function NeedMobileCard({
+  need,
+  onStatusChange,
+  archived,
+  cursus,
+  profiles,
+  onDeleted,
+}: {
+  need: NeedRow;
+  onStatusChange: (id: string, status: string) => void;
+  archived: boolean;
+  cursus: { id: string; name: string }[];
+  profiles: { id: string; fullName: string }[];
+  onDeleted: () => void;
+}) {
+  const nextDate = formatDate(need.nextTaskAt);
+
+  return (
+    <article className="space-y-3 rounded-lg border bg-card p-3 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <Link
+            href={`/besoins/${need.id}`}
+            className="block truncate text-base font-semibold hover:text-primary"
+          >
+            {need.title}
+          </Link>
+          <p className="mt-0.5 truncate text-sm text-muted-foreground">{need.companyName}</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          <StatusCell need={need} onStatusChange={onStatusChange} />
+          {!archived ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                id={`need-card-active-menu-${need.id}`}
+                className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent side="bottom" align="end">
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel>Clore</DropdownMenuLabel>
+                  <DropdownMenuItem variant="destructive" onClick={() => onStatusChange(need.id, "lost")}>Perdu</DropdownMenuItem>
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <div className="flex items-center gap-1">
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  id={`need-card-archived-menu-${need.id}`}
+                  className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent side="bottom" align="end">
+                  <DropdownMenuGroup>
+                    <DropdownMenuLabel>Remettre dans pipeline</DropdownMenuLabel>
+                    <DropdownMenuItem onClick={() => onStatusChange(need.id, "ad_chase")}>Ad Chase</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onStatusChange(need.id, "prospect")}>Prospect</DropdownMenuItem>
+                  </DropdownMenuGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <PermanentDeleteEntityButton
+                entityType="need"
+                entityId={need.id}
+                label={`${need.title} - ${need.companyName}`}
+                iconOnly
+                onDeleted={onDeleted}
+              />
+            </div>
+          )}
+        </div>
+      </div>
+
+      {need.needCandidates.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {need.needCandidates.slice(0, 4).map((candidate, index) => (
+            <span
+              key={index}
+              className={cn(
+                "inline-flex max-w-full items-center gap-1 rounded-full px-2 py-1 text-[11px]",
+                PROP_CHIP[candidate.propositionStatus] ?? "bg-muted text-muted-foreground"
+              )}
+            >
+              <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", PROP_DOT[candidate.propositionStatus] ?? "bg-gray-400")} />
+              <span className="truncate">{candidate.firstName}</span>
+              <span className="shrink-0">- {PROP_SHORT[candidate.propositionStatus] ?? candidate.propositionStatus}</span>
+            </span>
+          ))}
+          {need.needCandidates.length > 4 && (
+            <span className="self-center text-[11px] text-muted-foreground">+{need.needCandidates.length - 4}</span>
+          )}
+        </div>
+      )}
+
+      <dl className="grid grid-cols-2 gap-3 text-xs">
+        <div className="min-w-0">
+          <dt className="text-muted-foreground">Cursus</dt>
+          <dd className="mt-1 min-w-0">
+            <CursusCell need={need} cursus={cursus} />
+          </dd>
+        </div>
+        <div className="min-w-0">
+          <dt className="text-muted-foreground">Ville</dt>
+          <dd className="mt-1 truncate text-sm text-muted-foreground">{need.city ?? "-"}</dd>
+        </div>
+        <div className="min-w-0">
+          <dt className="text-muted-foreground">Recruteur</dt>
+          <dd className="mt-1 min-w-0">
+            <OwnerCell need={need} profiles={profiles} />
+          </dd>
+        </div>
+        <div className="min-w-0">
+          <dt className="text-muted-foreground">Prochaine tache</dt>
+          <dd className={cn("mt-1 text-sm", need.nextTaskOverdue ? "font-medium text-destructive" : "text-muted-foreground")}>
+            {nextDate ?? "-"}
+          </dd>
+        </div>
+      </dl>
+    </article>
+  );
+}
+
 export function PipelineList({
   needs,
   onStatusChange,
@@ -501,11 +625,11 @@ export function PipelineList({
   const activeFilterCount = [...filters.values()].filter((s) => s !== null).length;
 
   if (needs.length === 0) {
-    return <div className="px-6 py-16 text-center"><p className="text-sm text-muted-foreground">Aucun besoin</p></div>;
+    return <div className="px-4 py-16 text-center sm:px-6"><p className="text-sm text-muted-foreground">Aucun besoin</p></div>;
   }
 
   return (
-    <div className="px-6 py-4 space-y-2">
+    <div className="space-y-3 px-4 py-4 sm:px-6">
       {activeFilterCount > 0 && (
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground">{processed.length} / {needs.length} besoin{needs.length !== 1 ? "s" : ""}</span>
@@ -513,8 +637,28 @@ export function PipelineList({
         </div>
       )}
 
-      <div className="rounded-lg border overflow-visible">
-        <table className="w-full text-sm">
+      <div className="space-y-3 md:hidden">
+        {processed.length === 0 ? (
+          <div className="rounded-lg border border-dashed px-4 py-10 text-center text-xs text-muted-foreground">
+            Aucun besoin correspondant aux filtres
+          </div>
+        ) : (
+          processed.map((need) => (
+            <NeedMobileCard
+              key={need.id}
+              need={need}
+              onStatusChange={onStatusChange}
+              archived={archived}
+              cursus={cursus}
+              profiles={profiles}
+              onDeleted={() => router.refresh()}
+            />
+          ))
+        )}
+      </div>
+
+      <div className="hidden rounded-lg border md:block md:overflow-x-auto">
+        <table className="w-full min-w-[1050px] text-sm">
           <thead className="bg-muted/40 border-b">
             <tr>
               <SortHeader col="title"   label="Besoin"    sort={sort} onSort={(k, d) => setSort({ key: k, dir: d })} />
@@ -585,7 +729,10 @@ export function PipelineList({
                   <td className="px-4 py-2.5">
                     {!archived ? (
                       <DropdownMenu>
-                        <DropdownMenuTrigger className="h-7 w-7 rounded flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
+                        <DropdownMenuTrigger
+                          id={`need-list-active-menu-${n.id}`}
+                          className="h-7 w-7 rounded flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                        >
                           <MoreHorizontal className="h-4 w-4" />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent side="bottom" align="end">
@@ -598,7 +745,10 @@ export function PipelineList({
                     ) : (
                       <div className="flex items-center gap-1">
                         <DropdownMenu>
-                          <DropdownMenuTrigger className="h-7 w-7 rounded flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
+                          <DropdownMenuTrigger
+                            id={`need-list-archived-menu-${n.id}`}
+                            className="h-7 w-7 rounded flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                          >
                             <MoreHorizontal className="h-4 w-4" />
                           </DropdownMenuTrigger>
                           <DropdownMenuContent side="bottom" align="end">

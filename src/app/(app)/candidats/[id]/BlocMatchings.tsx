@@ -16,6 +16,7 @@ import {
   type MatchingForCandidate,
   type NeedOption,
 } from "@/app/(app)/matching/actions";
+import { canCandidateBeMatched } from "@/app/(app)/matching/rules";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -261,10 +262,14 @@ export function BlocMatchings({
   candidateId,
   initialMatchings,
   availableNeeds,
+  candidateStatus,
+  canCreateMatching = true,
 }: {
   candidateId: string;
   initialMatchings: MatchingForCandidate[];
   availableNeeds: NeedOption[];
+  candidateStatus: string;
+  canCreateMatching?: boolean;
 }) {
   const [addOpen, setAddOpen] = useState(false);
   const [refusalPending, setRefusalPending] = useState<string | null>(null);
@@ -291,6 +296,7 @@ export function BlocMatchings({
     }
   );
 
+  const canMatch = canCreateMatching && canCandidateBeMatched(candidateStatus);
   const matchedNeedIds = new Set(matchings.map((m) => m.needId));
   const available = availableNeeds.filter((n) => !matchedNeedIds.has(n.id));
 
@@ -364,18 +370,24 @@ export function BlocMatchings({
             {matchings.length}
           </span>
         </h2>
-        <Button size="sm" variant="outline" className="gap-1.5 h-7 text-xs" onClick={() => setAddOpen(true)}>
-          <Plus className="h-3.5 w-3.5" />
-          Proposer sur un besoin
-        </Button>
+        {canMatch && (
+          <Button size="sm" variant="outline" className="gap-1.5 h-7 text-xs" onClick={() => setAddOpen(true)}>
+            <Plus className="h-3.5 w-3.5" />
+            Proposer sur un besoin
+          </Button>
+        )}
       </div>
 
       {matchings.length === 0 ? (
         <div className="px-5 py-8 text-center">
           <p className="text-sm text-muted-foreground">Aucun besoin lié à ce candidat.</p>
-          <button onClick={() => setAddOpen(true)} className="mt-2 text-sm text-primary hover:underline">
-            Proposer sur un premier besoin
-          </button>
+          {canMatch ? (
+            <button onClick={() => setAddOpen(true)} className="mt-2 text-sm text-primary hover:underline">
+              Proposer sur un premier besoin
+            </button>
+          ) : (
+            <p className="mt-2 text-xs text-muted-foreground">Le candidat doit être au moins Admissible pour être proposé sur un besoin.</p>
+          )}
         </div>
       ) : (
         <div className="divide-y">

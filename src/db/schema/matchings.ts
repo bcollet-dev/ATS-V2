@@ -48,5 +48,10 @@ export const matchings = pgTable(
     index("matchings_candidate_idx").on(t.candidateId),
     index("matchings_need_idx").on(t.needId),
     index("matchings_proposition_status_idx").on(t.propositionStatus),
+    index("matchings_candidate_status_idx").on(t.candidateId, t.propositionStatus, t.createdAt),
+    index("matchings_need_status_idx").on(t.needId, t.propositionStatus, t.createdAt),
+    index("matchings_candidate_frozen_status_idx").on(t.candidateId, t.isFrozen, t.propositionStatus),
+    index("matchings_need_frozen_status_idx").on(t.needId, t.isFrozen, t.propositionStatus),
+    index("matchings_winner_class_idx").on(t.isWinner, t.classId),
   ]
 );

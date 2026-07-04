@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { needs, companies } from "@/db/schema";
+import { needs, companies, companyContacts } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { Building2, AlertTriangle, ExternalLink } from "lucide-react";
 import { DeleteEntityButton } from "@/components/entities/DeleteEntityButton";
@@ -21,9 +21,15 @@ export async function SidebarEntreprise({ needId, canEdit }: { needId: string; c
       companyProvidentFund: companies.providentFund,
       companyLegalRepFirstName: companies.legalRepFirstName,
       companyLegalRepLastName: companies.legalRepLastName,
+      contactFirstName: companyContacts.firstName,
+      contactLastName: companyContacts.lastName,
+      contactJobTitle: companyContacts.jobTitle,
+      contactEmail: companyContacts.email,
+      contactPhone: companyContacts.phone,
     })
     .from(needs)
     .leftJoin(companies, eq(needs.companyId, companies.id))
+    .leftJoin(companyContacts, eq(needs.contactId, companyContacts.id))
     .where(eq(needs.id, needId));
 
   if (!row) return null;
@@ -62,6 +68,18 @@ export async function SidebarEntreprise({ needId, canEdit }: { needId: string; c
         )}
         {row.companyCollectiveAgreement && (
           <p className="text-muted-foreground text-xs">{row.companyCollectiveAgreement}</p>
+        )}
+
+        {(row.contactFirstName || row.contactLastName) && (
+          <div className="rounded-md bg-muted/40 px-3 py-2 text-xs">
+            <p className="font-medium text-foreground">Contact contrat</p>
+            <p className="text-muted-foreground">
+              {[row.contactFirstName, row.contactLastName].filter(Boolean).join(" ")}
+              {row.contactJobTitle ? ` · ${row.contactJobTitle}` : ""}
+            </p>
+            {row.contactEmail && <p className="text-muted-foreground">{row.contactEmail}</p>}
+            {row.contactPhone && <p className="text-muted-foreground">{row.contactPhone}</p>}
+          </div>
         )}
 
         <a

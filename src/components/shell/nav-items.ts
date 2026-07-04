@@ -9,6 +9,7 @@ import {
   Mail,
   AlertCircle,
   RefreshCw,
+  Settings,
 } from "lucide-react";
 
 export const navItems = [
@@ -64,5 +65,13 @@ export const adminNavItems = [
     label: "Erreurs",
     href: "/erreurs",
     icon: AlertCircle,
+  },
+] as const;
+
+export const superAdminNavItems = [
+  {
+    label: "Paramètres",
+    href: "/settings",
+    icon: Settings,
   },
 ] as const;

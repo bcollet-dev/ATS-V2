@@ -21,9 +21,11 @@ function Field({ label, value }: { label: string; value: string | null | undefin
 export function BlocContact({
   candidateId,
   data,
+  canEdit = true,
 }: {
   candidateId: string;
   data: { email: string | null; phone: string | null };
+  canEdit?: boolean;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, startSave] = useTransition();
@@ -54,7 +56,7 @@ export function BlocContact({
       <div className="h-1 bg-primary/70" />
       <div className="flex items-center justify-between px-5 py-3.5 border-b bg-primary/[0.03]">
         <h2 className="text-sm font-semibold">Contact</h2>
-        {!isEditing && (
+        {!isEditing && canEdit && (
           <Button variant="ghost" size="sm" className="gap-1.5 h-7 text-xs" onClick={() => setIsEditing(true)}>
             <Pencil className="h-3.5 w-3.5" />
             Modifier
@@ -63,13 +65,13 @@ export function BlocContact({
       </div>
 
       {!isEditing ? (
-        <dl className="px-5 py-4 grid grid-cols-2 gap-x-8 gap-y-3">
+        <dl className="grid grid-cols-1 gap-x-8 gap-y-3 px-4 py-4 sm:grid-cols-2 sm:px-5">
           <Field label="Email" value={data.email} />
           <Field label="Téléphone" value={data.phone} />
         </dl>
       ) : (
         <form onSubmit={handleSubmit(onSubmit)} className="px-5 py-4 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="ct-email">Email</Label>
               <Input id="ct-email" type="email" {...register("email")} />
