@@ -6,11 +6,18 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
+    "typecheck": "next typegen && tsc --noEmit",
+    "check:env": "node scripts/check-production-env.mjs",
+    "perf:smoke": "node scripts/performance-volume-smoke.mjs",
+    "audit:prod": "npm audit --omit=dev --audit-level=moderate",
+    "validate:prod": "npm run check:env && npm run lint && npm run typecheck && npm test && npm run build && npm run audit:prod",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",
@@ -21,7 +28,7 @@
     "@hookform/resolvers": "^5.0.1",
     "@radix-ui/react-slot": "^1.2.3",
     "@react-pdf/renderer": "^4.3.0",
-    "@sentry/nextjs": "^9.24.0",
+    "@sentry/nextjs": "^10.63.0",
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.49.8",
     "@tiptap/extension-link": "^3.27.1",
@@ -32,12 +39,12 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "docxtemplater": "^3.69.0",
-    "drizzle-orm": "^0.44.1",
+    "drizzle-orm": "^0.45.2",
     "lucide-react": "^0.513.0",
     "mammoth": "^1.9.0",
     "next": "^15.3.3",
     "next-themes": "^0.4.6",
-    "nodemailer": "^7.0.3",
+    "nodemailer": "^9.0.3",
     "pdf-lib": "^1.17.1",
     "pdf-parse": "^1.1.1",
     "pizzip": "^3.2.0",
@@ -54,6 +61,16 @@
     "zod": "^3.24.4",
     "zustand": "^5.0.5"
   },
+  "browserslist": [
+    "last 2 Chrome versions",
+    "last 2 Firefox versions",
+    "last 2 Safari versions",
+    "last 2 Edge versions"
+  ],
+  "overrides": {
+    "postcss": "^8.5.16",
+    "esbuild": "^0.25.12"
+  },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.8",
     "@types/node": "^22.15.29",
@@ -63,8 +80,9 @@
     "@types/react-dom": "^19.1.5",
     "drizzle-kit": "^0.31.1",
     "eslint": "^9.28.0",
-    "eslint-config-next": "^15.3.3",
+    "eslint-config-next": "^15.5.19",
     "tailwindcss": "^4.1.8",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^4.1.9"
   }
 }

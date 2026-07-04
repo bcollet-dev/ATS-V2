@@ -18,6 +18,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="fr" className={cn("font-sans", geist.variable)}>
+      <head>
+        <link rel="preconnect" href="https://vercel.live" />
+      </head>
       <body>
         {children}
         <Toaster richColors position="top-right" />
