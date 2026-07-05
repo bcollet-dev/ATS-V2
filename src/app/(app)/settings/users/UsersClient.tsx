@@ -3,6 +3,8 @@
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import type { AppRole } from "@/lib/permissions";
+import { startPreview } from "./preview-actions";
+import { Eye } from "lucide-react";
 
 const ROLE_LABELS: Record<AppRole, string> = {
   admin:                 "Admin",
@@ -38,9 +40,11 @@ type UserRow = {
 export function UsersClient({
   users,
   currentUserId,
+  isAdmin,
 }: {
   users: UserRow[];
   currentUserId: string;
+  isAdmin: boolean;
 }) {
   return (
     <section className="rounded-lg border bg-card divide-y">
@@ -83,6 +87,18 @@ export function UsersClient({
             <span className="text-xs text-muted-foreground shrink-0 w-20 text-right">
               {formatDate(u.createdAt)}
             </span>
+            {isAdmin && u.id !== currentUserId && u.role !== "admin" && (
+              <form action={startPreview.bind(null, u.id)}>
+                <button
+                  type="submit"
+                  title={`Prévisualiser en tant que ${u.fullName}`}
+                  className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors shrink-0"
+                >
+                  <Eye className="h-3.5 w-3.5" />
+                  <span>Voir comme</span>
+                </button>
+              </form>
+            )}
           </div>
         );
       })}

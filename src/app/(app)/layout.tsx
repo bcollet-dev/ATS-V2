@@ -6,6 +6,15 @@ import { AppShell } from "@/components/shell/app-shell";
 import { NotificationListener } from "@/components/shell/NotificationListener";
 import { ConfirmNameModal } from "./onboarding/ConfirmNameModal";
 import { FloatingTaskCreator, TaskContextProvider } from "@/components/tasks/FloatingTaskCreator";
+import { exitPreview } from "./settings/users/preview-actions";
+import { Eye } from "lucide-react";
+
+const ROLE_LABELS: Record<string, string> = {
+  direction:             "Direction",
+  team_leader:           "Team Leader",
+  admissions:            "Recruteur",
+  relations_entreprises: "Relation entreprise",
+};
 
 export default async function AppLayout({
   children,
@@ -40,9 +49,28 @@ export default async function AppLayout({
     <TaskContextProvider>
       <AppShell user={user} unreadCount={unreadCount}>
         <NotificationListener userId={user.id} />
-        {!user.nameConfirmed && <ConfirmNameModal defaultName={user.fullName} />}
+        {!user.nameConfirmed && !user._isPreview && <ConfirmNameModal defaultName={user.fullName} />}
+        {user._isPreview && (
+          <div className="sticky top-0 z-50 flex items-center justify-between gap-3 bg-[var(--color-eda-orange)] px-4 py-2 text-white">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <Eye className="h-4 w-4 shrink-0" />
+              <span>
+                Prévisualisation&nbsp;—&nbsp;{user.fullName}&nbsp;
+                ({ROLE_LABELS[user.role] ?? user.role})&nbsp;—&nbsp;Lecture seule
+              </span>
+            </div>
+            <form action={exitPreview}>
+              <button
+                type="submit"
+                className="rounded bg-white/20 px-3 py-1 text-xs font-semibold hover:bg-white/30 transition-colors shrink-0"
+              >
+                Quitter
+              </button>
+            </form>
+          </div>
+        )}
         {children}
-        <FloatingTaskCreator profiles={activeProfiles} currentUserId={user.id} />
+        {!user._isPreview && <FloatingTaskCreator profiles={activeProfiles} currentUserId={user.id} />}
       </AppShell>
     </TaskContextProvider>
   );

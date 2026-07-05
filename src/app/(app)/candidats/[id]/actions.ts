@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { candidates, activityEvents, documents, taskLinks } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, checkPreviewGuard } from "@/lib/auth";
 import { can, type AppRole } from "@/lib/permissions";
 import { encryptNir, decryptNir } from "@/lib/nir";
 import { createStorageClient } from "@/lib/supabase/server";
@@ -189,6 +189,8 @@ export async function updateRecrutement(
 export async function deleteCandidate(
   candidateId: string
 ): Promise<{ success: boolean; error?: string }> {
+  const guard = await checkPreviewGuard();
+  if (guard) return guard;
   const user = await getCurrentUser();
   if (!user) return { success: false, error: "Non authentifie" };
   if (!can(user.role as AppRole, "candidates:delete")) return { success: false, error: "Non autorisé" };
@@ -232,6 +234,8 @@ const HARD_DELETE_STATUSES = new Set(["temporary_refusal", "definitive_refusal"]
 export async function permanentlyDeleteCandidate(
   candidateId: string
 ): Promise<{ success: boolean; error?: string }> {
+  const guard = await checkPreviewGuard();
+  if (guard) return guard;
   const user = await getCurrentUser();
   if (!user) return { success: false, error: "Non authentifie" };
   if (!can(user.role as AppRole, "candidates:delete")) return { success: false, error: "Non autorisé" };

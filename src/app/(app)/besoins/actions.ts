@@ -1,6 +1,6 @@
 "use server";
 
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, checkPreviewGuard } from "@/lib/auth";
 import { can, type AppRole } from "@/lib/permissions";
 import { db } from "@/db";
 import { needs, companies, cursus, profiles, tasks, taskLinks, matchings, candidates, needCursus, notifications } from "@/db/schema";
@@ -277,6 +277,8 @@ export async function updateNeedStatus(id: string, status: string, lostReason?: 
 }
 
 export async function permanentlyDeleteNeed(id: string): Promise<{ success: boolean; error?: string }> {
+  const guard = await checkPreviewGuard();
+  if (guard) return guard;
   const actor = await requireAuth();
   if (!can(actor.role as AppRole, "needs:delete")) return { success: false, error: "Non autorisé" };
 

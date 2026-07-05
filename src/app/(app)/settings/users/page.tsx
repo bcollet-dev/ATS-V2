@@ -37,6 +37,7 @@ export default async function UsersPage() {
           createdAt: u.createdAt.toISOString(),
         }))}
         currentUserId={actor.id}
+        isAdmin={actor.role === "admin"}
       />
     </div>
   );

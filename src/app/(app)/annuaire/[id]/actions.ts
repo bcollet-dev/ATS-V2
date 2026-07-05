@@ -1,6 +1,6 @@
 "use server";
 
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, checkPreviewGuard } from "@/lib/auth";
 import { can, type AppRole } from "@/lib/permissions";
 import { db } from "@/db";
 import {
@@ -337,6 +337,8 @@ export async function syncFromPappers(
 export async function archiveCompany(
   companyId: string
 ): Promise<{ success: boolean; error?: string }> {
+  const guard = await checkPreviewGuard();
+  if (guard) return guard;
   const actor = await requireAuth();
   if (!can(actor.role as AppRole, "companies:delete")) return { success: false, error: "Non autorisé" };
 
