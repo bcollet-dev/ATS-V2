@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect, useTransition } from "react";
 import {
   Phone, Mail, FileText, RefreshCw, Users, MoreHorizontal, ListTodo,
   ChevronUp, ChevronDown, SlidersHorizontal, Check, Search,
+  Circle, CheckCircle2, Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { TaskFull } from "./TaskSlideOver";
+import { toggleGlobalTask } from "./actions";
 
 const CALL_STATUS_LABELS: Record<string, string> = {
   answered: "Décroché",
@@ -243,6 +245,68 @@ function ColHeader({
   );
 }
 
+// ─── Task Row ────────────────────────────────────────────────────────────────
+
+function TaskRow({ task, onSelect }: { task: TaskFull; onSelect: (t: TaskFull) => void }) {
+  const [isPending, startTransition] = useTransition();
+  const Icon = CATEGORY_ICONS[task.category] ?? MoreHorizontal;
+  const status = getStatus(task);
+  const meta = STATUS_META[status];
+  const attachmentLabels = task.attachments.slice(0, 2).map((a) => a.label);
+  const extraAttachments = task.attachments.length - attachmentLabels.length;
+  const entityName = attachmentLabels.length > 0
+    ? `${attachmentLabels.join(", ")}${extraAttachments > 0 ? ` +${extraAttachments}` : ""}`
+    : "—";
+  const dateToShow = task.completedAt ?? task.dueAt;
+  const desc = renderDescription(task.category, task.description);
+
+  function handleToggle(e: React.MouseEvent) {
+    e.stopPropagation();
+    startTransition(async () => { await toggleGlobalTask(task.id); });
+  }
+
+  return (
+    <tr
+      className="hover:bg-muted/30 cursor-pointer transition-colors"
+      onClick={() => onSelect(task)}
+    >
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleToggle}
+            disabled={isPending}
+            className="shrink-0 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+          >
+            {isPending
+              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              : task.completedAt
+                ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                : <Circle className="h-3.5 w-3.5" />
+            }
+          </button>
+          <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          <span className={cn("font-medium", task.completedAt && "line-through text-muted-foreground")}>
+            {task.title}
+          </span>
+        </div>
+        {desc && (
+          <p className="text-xs text-muted-foreground mt-0.5 pl-10 line-clamp-1">{desc}</p>
+        )}
+      </td>
+      <td className="px-4 py-3 text-muted-foreground">{entityName}</td>
+      <td className="px-4 py-3 text-muted-foreground">{task.assigneeName ?? "—"}</td>
+      <td className={cn("px-4 py-3", status === "overdue" && "text-destructive font-medium")}>
+        {formatDate(dateToShow)}
+      </td>
+      <td className="px-4 py-3">
+        <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", meta.className)}>
+          {meta.label}
+        </span>
+      </td>
+    </tr>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function ListView({ tasks, onSelect }: { tasks: TaskFull[]; onSelect: (t: TaskFull) => void }) {
@@ -342,47 +406,9 @@ export function ListView({ tasks, onSelect }: { tasks: TaskFull[]; onSelect: (t:
               </tr>
             </thead>
             <tbody className="divide-y">
-              {processed.map((task) => {
-                const Icon = CATEGORY_ICONS[task.category] ?? MoreHorizontal;
-                const status = getStatus(task);
-                const meta = STATUS_META[status];
-                const attachmentLabels = task.attachments.slice(0, 2).map((attachment) => attachment.label);
-                const extraAttachments = task.attachments.length - attachmentLabels.length;
-                const entityName = attachmentLabels.length > 0
-                  ? `${attachmentLabels.join(", ")}${extraAttachments > 0 ? ` +${extraAttachments}` : ""}`
-                  : "—";
-                const dateToShow = task.completedAt ?? task.dueAt;
-
-                return (
-                  <tr
-                    key={task.id}
-                    className="hover:bg-muted/30 cursor-pointer transition-colors"
-                    onClick={() => onSelect(task)}
-                  >
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                        <span className={cn("font-medium", task.completedAt && "line-through text-muted-foreground")}>
-                          {task.title}
-                        </span>
-                      </div>
-                      {renderDescription(task.category, task.description) && (
-                        <p className="text-xs text-muted-foreground mt-0.5 pl-5 line-clamp-1">{renderDescription(task.category, task.description)}</p>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground">{entityName}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{task.assigneeName ?? "—"}</td>
-                    <td className={cn("px-4 py-3", status === "overdue" && "text-destructive font-medium")}>
-                      {formatDate(dateToShow)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", meta.className)}>
-                        {meta.label}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
+              {processed.map((task) => (
+                <TaskRow key={task.id} task={task} onSelect={onSelect} />
+              ))}
             </tbody>
           </table>
         </div>
