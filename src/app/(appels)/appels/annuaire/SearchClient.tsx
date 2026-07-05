@@ -2,9 +2,18 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Phone, Search, User, Building2 } from "lucide-react";
-import { searchContacts, logCall, type ContactResult } from "../actions";
-import { PostCallModal } from "../_components/PostCallModal";
-import type { CallStatus } from "../_components/PostCallModal";
+import {
+  searchContacts,
+  logCall,
+  createQuickTask,
+  type ContactResult,
+  type ProfileOption,
+} from "../actions";
+import {
+  PostCallModal,
+  type CallFormData,
+  type TaskFormData,
+} from "../_components/PostCallModal";
 
 const PENDING_CALL_KEY = "eda_pending_call";
 
@@ -17,13 +26,16 @@ function useDebounce<T>(value: T, delay: number): T {
   return debounced;
 }
 
-export function SearchClient() {
+interface SearchClientProps {
+  currentUserId: string;
+  profiles: ProfileOption[];
+}
+
+export function SearchClient({ currentUserId, profiles }: SearchClientProps) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ContactResult[]>([]);
   const [searching, setSearching] = useState(false);
-  const [pendingContact, setPendingContact] = useState<ContactResult | null>(
-    null,
-  );
+  const [pendingContact, setPendingContact] = useState<ContactResult | null>(null);
   const [showModal, setShowModal] = useState(false);
   const pendingRef = useRef<ContactResult | null>(null);
 
@@ -40,7 +52,7 @@ export function SearchClient() {
       .finally(() => setSearching(false));
   }, [debouncedQuery]);
 
-  // Restore pending call from localStorage on mount (after page refresh)
+  // Restore pending call from localStorage on mount (page refresh after call)
   useEffect(() => {
     const stored = localStorage.getItem(PENDING_CALL_KEY);
     if (stored) {
@@ -84,11 +96,7 @@ export function SearchClient() {
     localStorage.removeItem(PENDING_CALL_KEY);
   };
 
-  const handleModalSubmit = async (data: {
-    status: CallStatus;
-    note: string;
-    relanceDate: string;
-  }) => {
+  const handleSubmitCall = async (data: CallFormData) => {
     if (!pendingContact) return;
     await logCall({
       contactId: pendingContact.id,
@@ -101,12 +109,30 @@ export function SearchClient() {
       callStatus: data.status,
       note: data.note || undefined,
       relanceDate: data.relanceDate || undefined,
+      relanceAssignedTo: data.relanceAssignedTo || undefined,
     });
-    handleModalClose();
+  };
+
+  const handleSubmitTask = async (data: TaskFormData) => {
+    if (!pendingContact) return;
+    await createQuickTask({
+      contactId: pendingContact.id,
+      contactType: pendingContact.type,
+      companyId:
+        pendingContact.type === "company_contact"
+          ? pendingContact.companyId
+          : undefined,
+      contactName: `${pendingContact.firstName} ${pendingContact.lastName}`,
+      category: data.category,
+      title: data.title,
+      dueAt: data.dueAt,
+      assignedTo: data.assignedTo,
+    });
   };
 
   return (
     <div className="flex h-full flex-col">
+      {/* Search bar */}
       <div className="sticky top-0 border-b border-gray-100 bg-white px-4 py-3">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
@@ -121,6 +147,7 @@ export function SearchClient() {
         </div>
       </div>
 
+      {/* Results */}
       <div className="flex-1 space-y-2 overflow-y-auto px-4 py-3">
         {query.length > 0 && query.length < 2 && (
           <p className="py-8 text-center text-sm text-gray-400">
@@ -128,9 +155,7 @@ export function SearchClient() {
           </p>
         )}
         {searching && (
-          <p className="py-8 text-center text-sm text-gray-400">
-            Recherche…
-          </p>
+          <p className="py-8 text-center text-sm text-gray-400">Recherche…</p>
         )}
         {!searching && query.length >= 2 && results.length === 0 && (
           <p className="py-8 text-center text-sm text-gray-400">
@@ -154,11 +179,15 @@ export function SearchClient() {
         )}
       </div>
 
+      {/* Post-call modal */}
       {showModal && pendingContact && (
         <PostCallModal
           contactName={`${pendingContact.firstName} ${pendingContact.lastName}`}
+          currentUserId={currentUserId}
+          profiles={profiles}
           onClose={handleModalClose}
-          onSubmit={handleModalSubmit}
+          onSubmitCall={handleSubmitCall}
+          onSubmitTask={handleSubmitTask}
         />
       )}
     </div>
