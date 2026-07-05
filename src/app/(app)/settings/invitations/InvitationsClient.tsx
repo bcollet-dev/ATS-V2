@@ -57,7 +57,7 @@ export function InvitationsClient({
         toast.error(result.error);
         return;
       }
-      toast.success(`Invitation envoyée à ${email}`);
+      toast.success(`Accès autorisé pour ${email}`);
       const newInvitation: InvitationRow = {
         email: email.trim().toLowerCase(),
         role,
