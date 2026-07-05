@@ -31,6 +31,7 @@ export const tasks = pgTable(
 
     assignedTo: uuid("assigned_to").references(() => profiles.id, { onDelete: "set null" }),
     createdBy: uuid("created_by").references(() => profiles.id, { onDelete: "set null" }),
+    source: text("source"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
