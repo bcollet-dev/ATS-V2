@@ -8,6 +8,24 @@ import {
 import { cn } from "@/lib/utils";
 import type { TaskFull } from "./TaskSlideOver";
 
+const CALL_STATUS_LABELS: Record<string, string> = {
+  answered: "Décroché",
+  no_answer: "Non décroché",
+  voicemail: "Messagerie",
+};
+
+function renderDescription(category: string, description: string | null): string | null {
+  if (!description) return null;
+  if (category === "call") {
+    try {
+      const { status, note } = JSON.parse(description) as { status?: string; note?: string };
+      const label = (status && CALL_STATUS_LABELS[status]) ?? status ?? "";
+      return note ? `${label} — ${note}` : label || null;
+    } catch { /* not JSON, fall through */ }
+  }
+  return description;
+}
+
 const CATEGORY_ICONS: Record<string, React.FC<{ className?: string }>> = {
   call: Phone, email: Mail, document: FileText,
   follow_up: RefreshCw, interview: Users, other: MoreHorizontal,
@@ -348,8 +366,8 @@ export function ListView({ tasks, onSelect }: { tasks: TaskFull[]; onSelect: (t:
                           {task.title}
                         </span>
                       </div>
-                      {task.description && (
-                        <p className="text-xs text-muted-foreground mt-0.5 pl-5 line-clamp-1">{task.description}</p>
+                      {renderDescription(task.category, task.description) && (
+                        <p className="text-xs text-muted-foreground mt-0.5 pl-5 line-clamp-1">{renderDescription(task.category, task.description)}</p>
                       )}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{entityName}</td>

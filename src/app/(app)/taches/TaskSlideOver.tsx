@@ -31,6 +31,24 @@ export type TaskFull = {
 
 type Profile = { id: string; fullName: string; email: string };
 
+const CALL_STATUS_LABELS: Record<string, string> = {
+  answered: "Décroché",
+  no_answer: "Non décroché",
+  voicemail: "Messagerie",
+};
+
+function renderDescription(category: string, description: string | null): string | null {
+  if (!description) return null;
+  if (category === "call") {
+    try {
+      const { status, note } = JSON.parse(description) as { status?: string; note?: string };
+      const label = (status && CALL_STATUS_LABELS[status]) ?? status ?? "";
+      return note ? `${label} — ${note}` : label || null;
+    } catch { /* not JSON, fall through */ }
+  }
+  return description;
+}
+
 const CATEGORY_LABELS: Record<string, string> = {
   call: "Appel", email: "Email", document: "Document",
   follow_up: "Relance", interview: "Entretien", other: "Autre",
@@ -216,8 +234,8 @@ export function TaskSlideOver({
                   </h2>
                 </div>
 
-                {task.description && (
-                  <p className="text-sm text-muted-foreground pl-8">{task.description}</p>
+                {renderDescription(task.category, task.description) && (
+                  <p className="text-sm text-muted-foreground pl-8">{renderDescription(task.category, task.description)}</p>
                 )}
 
                 <dl className="space-y-3 pl-8">
