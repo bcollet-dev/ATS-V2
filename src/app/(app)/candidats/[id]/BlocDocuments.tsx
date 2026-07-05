@@ -7,7 +7,6 @@ import {
   Paperclip, FileText, Loader2, Trash2, Plus, CheckCircle,
   RotateCcw, ExternalLink, Upload,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ExtractionReviewSheet } from "./ExtractionReviewSheet";
 import {

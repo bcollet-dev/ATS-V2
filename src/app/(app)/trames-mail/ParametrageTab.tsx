@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useTransition } from "react";
+import Image from "next/image";
 import { Loader2, Save, Upload, X, Mail, CheckCircle2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -160,9 +161,11 @@ export function ParametrageTab({ userId, userName, initialSigData, hasGmailConne
             <div className="flex items-center gap-3">
               {photoUrl ? (
                 <div className="relative shrink-0">
-                  <img
+                  <Image
                     src={photoUrl}
                     alt="Photo de profil"
+                    width={56}
+                    height={56}
                     className="w-14 h-14 rounded-full object-cover border"
                   />
                   <button

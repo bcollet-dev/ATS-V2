@@ -25,7 +25,6 @@ const NEED_STATUS_BADGE: Record<string, string> = {
 
 export function BlocBesoins({
   companyId,
-  companyName,
   initialNeeds,
   companies,
   cursus,

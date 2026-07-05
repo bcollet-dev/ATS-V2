@@ -24,10 +24,6 @@ const TYPE_STYLES = {
   entreprise: { badge: "bg-emerald-100 text-emerald-700", icon: Building2 },
 } as const;
 
-const TYPE_ROUTES = {
-  candidat: "/candidats",
-  entreprise: "/annuaire",
-} as const;
 
 export function AnnuaireClient({ cursus }: { cursus: { id: string; name: string }[] }) {
   const router = useRouter();

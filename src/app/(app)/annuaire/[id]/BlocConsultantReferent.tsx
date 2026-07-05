@@ -3,7 +3,6 @@
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { UserCheck, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { updateCompanyOwner } from "./actions";
 import { cn } from "@/lib/utils";
 

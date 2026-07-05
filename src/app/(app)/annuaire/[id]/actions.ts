@@ -4,7 +4,7 @@ import { requireAuth } from "@/lib/auth";
 import { can, type AppRole } from "@/lib/permissions";
 import { db } from "@/db";
 import {
-  companies, companyContacts, needs, matchings, candidates, activityEvents, profiles,
+  companies, companyContacts, needs, matchings, candidates, activityEvents,
 } from "@/db/schema";
 import { eq, isNull, and, asc, inArray, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";

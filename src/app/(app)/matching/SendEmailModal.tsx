@@ -175,7 +175,7 @@ export function SendEmailModal({
   function toggleCandidateExclusion(candidateId: string) {
     setExcludedCandidateIds((prev) => {
       const next = new Set(prev);
-      next.has(candidateId) ? next.delete(candidateId) : next.add(candidateId);
+      if (next.has(candidateId)) next.delete(candidateId); else next.add(candidateId);
       return next;
     });
   }

@@ -4,9 +4,9 @@ import { requireAuth } from "@/lib/auth";
 import { db } from "@/db";
 import {
   candidates, needs, tasks, activityEvents, matchings, classes, cursus,
-  profiles, taskLinks,
+  profiles,
 } from "@/db/schema";
-import { eq, and, isNull, lt, inArray, gte, lte, desc, asc, count, max, sql, or, avg, ne } from "drizzle-orm";
+import { eq, and, isNull, lt, inArray, gte, lte, desc, asc, count, max, sql, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { currentSchoolYear, schoolYearFromStart } from "@/lib/dashboard/school-year";
 import type { DashboardScope } from "./DashboardClient";
@@ -298,8 +298,6 @@ export async function getSourcesData(scope: DashboardScope, startYear?: number):
 }
 
 // ─── Pipeline cursus ──────────────────────────────────────────────────────────
-
-const ARCHIVED_STATUSES = ["definitive_refusal", "temporary_refusal", "contract_break"];
 
 export async function getPipelineCursusData(scope: DashboardScope, startYear?: number): Promise<{
   rows: { cursus: string; inPipeline: number; placed: number }[];

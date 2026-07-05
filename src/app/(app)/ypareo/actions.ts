@@ -236,20 +236,6 @@ function ypareoNationalite(value: unknown) {
   return 3;
 }
 
-const SITUATION_AVANT_LABELS: Record<number, string> = {
-  1: "Scolarite type college",
-  2: "IME / IMP",
-  3: "Second cycle general et technologique",
-  4: "Second cycle professionnel",
-  5: "Enseignement superieur",
-  6: "Contrat de professionnalisation",
-  7: "Stagiaire",
-  8: "En emploi",
-  9: "Demandeur d'emploi",
-  10: "Autre situation",
-  11: "Inconnue",
-};
-
 const DERNIERE_CLASSE_LABELS: Record<number, string> = {
   1: "Derniere annee du cycle obtenue",
   11: "1ere annee validee",
@@ -1633,12 +1619,6 @@ function ypareoEmails(value: unknown) {
     .map((email) => email!.toLowerCase());
 }
 
-function ypareoPhones(value: unknown) {
-  return arrayValue(value)
-    .map((entry) => clean(entry.numero))
-    .filter(Boolean) as string[];
-}
-
 function personnelMatchesMaster(personnel: JsonRecord, draft: YpareoPlacementDraft) {
   const section = draft.sections.find((s) => s.title === "Maitre d'apprentissage");
   const val = (label: string) => section?.fields.find((f) => f.label === label)?.value ?? null;
@@ -1790,12 +1770,3 @@ function buildFormationPayload(
   };
 }
 
-function buildCursusFromDraft(draft: YpareoPlacementDraft) {
-  const section = draft.sections.find((s) => s.title === "Formation");
-  const val = (label: string) => section?.fields.find((f) => f.label === label)?.value ?? null;
-  return {
-    nom: val("Cursus cible principal"),
-    code: val("Code cursus"),
-    id: val("Id Ypareo cursus"),
-  };
-}

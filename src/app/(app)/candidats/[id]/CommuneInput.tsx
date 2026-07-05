@@ -13,7 +13,7 @@ interface CommuneInputProps {
 export function CommuneInput({ value, onChange, onSelectCommune }: CommuneInputProps) {
   const [suggestions, setSuggestions] = useState<CommuneResult[]>([]);
   const [open, setOpen] = useState(false);
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
   const containerRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 

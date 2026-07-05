@@ -3,7 +3,6 @@
 import { useState, useTransition } from "react";
 import { X, Plus, Check, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 import { WIDGET_REGISTRY } from "@/lib/dashboard/widget-registry";
 
 type Props = {

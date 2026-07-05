@@ -150,7 +150,6 @@ export default async function BesoinPage({
   const badgeClass = STATUS_BADGE[need.status] ?? "bg-muted text-muted-foreground";
   const role = actor.role as AppRole;
   const canEdit = can(role, "needs:edit");
-  const canDelete = can(role, "needs:delete");
   const remunerationLines = Array.isArray(need.remunerationLines)
     ? need.remunerationLines
     : [];

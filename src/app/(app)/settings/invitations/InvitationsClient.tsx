@@ -46,7 +46,7 @@ export function InvitationsClient({
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<AppRole>("admissions");
   const [isSaving, startSave] = useTransition();
-  const [deletingEmail, startDelete] = useTransition();
+  const [, startDelete] = useTransition();
   const [deletingTarget, setDeletingTarget] = useState<string | null>(null);
 
   function handleSubmit(e: React.FormEvent) {

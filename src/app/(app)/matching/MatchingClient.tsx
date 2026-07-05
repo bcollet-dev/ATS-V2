@@ -652,14 +652,14 @@ export function MatchingClient({
   function toggleCand(id: string, checked: boolean) {
     setSelectedCandIds((prev) => {
       const next = new Set(prev);
-      checked ? next.add(id) : next.delete(id);
+      if (checked) next.add(id); else next.delete(id);
       return next;
     });
   }
   function toggleNeed(id: string, checked: boolean) {
     setSelectedNeedIds((prev) => {
       const next = new Set(prev);
-      checked ? next.add(id) : next.delete(id);
+      if (checked) next.add(id); else next.delete(id);
       return next;
     });
   }

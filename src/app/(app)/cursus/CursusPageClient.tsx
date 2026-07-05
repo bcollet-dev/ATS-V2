@@ -42,12 +42,6 @@ function relativeDate(iso: string): string {
   return `il y a ${days} j`;
 }
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("fr-FR", {
-    day: "numeric", month: "short", year: "numeric",
-    hour: "2-digit", minute: "2-digit",
-  });
-}
 
 // ─── Synced cursus card ───────────────────────────────────────────────────────
 

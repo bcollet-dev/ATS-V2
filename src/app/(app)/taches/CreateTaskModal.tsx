@@ -86,7 +86,7 @@ export function CreateTaskModal({
     setQuery("");
     setResults([]);
     setError("");
-  }, [open, initialKey]);
+  }, [open, initialKey, initialAttachments]);
 
   useEffect(() => {
     if (query.length < 2) {

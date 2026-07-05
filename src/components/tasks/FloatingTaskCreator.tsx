@@ -29,7 +29,7 @@ export function TaskContextScope({ attachment }: { attachment: TaskCreatorAttach
   useEffect(() => {
     setAttachment(attachment);
     return () => setAttachment(null);
-  }, [key, setAttachment]);
+  }, [key, attachment, setAttachment]);
 
   return null;
 }

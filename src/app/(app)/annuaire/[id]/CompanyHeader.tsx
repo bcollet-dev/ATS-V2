@@ -10,7 +10,6 @@ import { archiveCompany } from "./actions";
 
 export function CompanyHeader({
   company,
-  canEdit,
   canDelete,
 }: {
   company: {

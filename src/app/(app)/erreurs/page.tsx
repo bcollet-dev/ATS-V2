@@ -1,7 +1,7 @@
 import { requireRole } from "@/lib/auth";
 import { db } from "@/db";
 import { bugReports, profiles, ypareoLogs, candidates } from "@/db/schema";
-import { eq, desc, isNull } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { BugTable } from "./BugTable";
 import { YpareoLogsTable } from "./YpareoLogsTable";
 

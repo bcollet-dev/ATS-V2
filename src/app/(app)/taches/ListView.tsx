@@ -8,11 +8,6 @@ import {
 import { cn } from "@/lib/utils";
 import type { TaskFull } from "./TaskSlideOver";
 
-const CATEGORY_LABELS: Record<string, string> = {
-  call: "Appel", email: "Email", document: "Document",
-  follow_up: "Relance", interview: "Entretien", other: "Autre",
-};
-
 const CATEGORY_ICONS: Record<string, React.FC<{ className?: string }>> = {
   call: Phone, email: Mail, document: FileText,
   follow_up: RefreshCw, interview: Users, other: MoreHorizontal,
@@ -52,7 +47,6 @@ function getColValue(task: TaskFull, col: SortKey): string {
 
 function FilterPopover({
   col,
-  label,
   allValues,
   selected,
   onSelect,
@@ -61,7 +55,6 @@ function FilterPopover({
   onClose,
 }: {
   col: SortKey;
-  label: string;
   allValues: string[];
   selected: Set<string> | null;
   onSelect: (values: Set<string> | null) => void;
@@ -219,7 +212,6 @@ function ColHeader({
         {open && (
           <FilterPopover
             col={col}
-            label={label}
             allValues={allValues}
             selected={selected}
             onSelect={(v) => onFilters(col, v)}

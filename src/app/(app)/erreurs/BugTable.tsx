@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition, useRef } from "react";
-import { Plus, Trash2, ChevronDown, Loader2, Bug } from "lucide-react";
+import { Plus, Trash2, Loader2, Bug } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -256,7 +256,6 @@ export function BugTable({ initialBugs }: { initialBugs: BugRow[] }) {
   const [filter, setFilter] = useState<"all" | "open" | "in_progress" | "fixed">("all");
 
   const filtered = filter === "all" ? initialBugs : initialBugs.filter((b) => b.status === filter);
-  const openCount = initialBugs.filter((b) => b.status === "open").length;
 
   return (
     <div>

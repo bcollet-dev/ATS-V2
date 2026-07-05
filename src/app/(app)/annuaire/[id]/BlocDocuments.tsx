@@ -3,7 +3,6 @@
 import { useState, useTransition, useRef } from "react";
 import { toast } from "sonner";
 import { Paperclip, Upload, Trash2, FileText, Loader2, Download } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
   uploadCompanyDocument, deleteCompanyDocument, getSignedDocumentUrl,

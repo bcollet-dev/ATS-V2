@@ -2,7 +2,7 @@ import { db } from "@/db";
 import { activityEvents, profiles } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
 import {
-  History, Pencil, ListTodo, RefreshCw, Trash2, UserPlus,
+  History, Pencil, ListTodo, Trash2, UserPlus,
   ArrowRight, Building2, UserCheck, Globe, Mail,
 } from "lucide-react";
 import Link from "next/link";
