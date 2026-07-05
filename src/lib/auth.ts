@@ -8,9 +8,14 @@ import { cookies } from "next/headers";
 export type UserProfile = typeof profiles.$inferSelect & {
   _isPreview?: true;
   _realAdminId?: string;
+  _previewMode?: "role" | "user";
 };
 
 const PREVIEW_COOKIE = "ats_preview_uid";
+
+const VALID_ROLES = new Set([
+  "direction", "team_leader", "admissions", "relations_entreprises",
+]);
 
 export async function getCurrentUser(): Promise<UserProfile | null> {
   const supabase = await createClient();
@@ -30,20 +35,40 @@ export async function getCurrentUser(): Promise<UserProfile | null> {
 
   if (!profile) return null;
 
-  // Admin preview: swap identity with a specific user for the session
   if (profile.role === "admin") {
     const cookieStore = await cookies();
-    const previewUid = cookieStore.get(PREVIEW_COOKIE)?.value;
-    if (previewUid && previewUid !== profile.id) {
-      const impersonated = await db.query.profiles.findFirst({
-        where: and(
-          eq(profiles.id, previewUid),
-          eq(profiles.active, true),
-          isNull(profiles.deletedAt),
-        ),
-      });
-      if (impersonated) {
-        return { ...impersonated, _isPreview: true, _realAdminId: profile.id };
+    const previewVal = cookieStore.get(PREVIEW_COOKIE)?.value;
+
+    if (previewVal) {
+      // Role-only preview: cookie starts with "role:"
+      if (previewVal.startsWith("role:")) {
+        const role = previewVal.slice(5);
+        if (VALID_ROLES.has(role)) {
+          return {
+            ...profile,
+            role: role as UserProfile["role"],
+            _isPreview: true,
+            _realAdminId: profile.id,
+            _previewMode: "role",
+          };
+        }
+      } else if (previewVal !== profile.id) {
+        // User-specific preview: cookie is a user UUID
+        const impersonated = await db.query.profiles.findFirst({
+          where: and(
+            eq(profiles.id, previewVal),
+            eq(profiles.active, true),
+            isNull(profiles.deletedAt),
+          ),
+        });
+        if (impersonated) {
+          return {
+            ...impersonated,
+            _isPreview: true,
+            _realAdminId: profile.id,
+            _previewMode: "user",
+          };
+        }
       }
     }
   }

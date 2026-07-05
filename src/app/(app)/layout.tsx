@@ -55,8 +55,11 @@ export default async function AppLayout({
             <div className="flex items-center gap-2 text-sm font-medium">
               <Eye className="h-4 w-4 shrink-0" />
               <span>
-                Prévisualisation&nbsp;—&nbsp;{user.fullName}&nbsp;
-                ({ROLE_LABELS[user.role] ?? user.role})&nbsp;—&nbsp;Lecture seule
+                {user._previewMode === "role"
+                  ? `Prévisualisation du rôle : ${ROLE_LABELS[user.role] ?? user.role}`
+                  : `Prévisualisation — ${user.fullName} (${ROLE_LABELS[user.role] ?? user.role})`
+                }
+                &nbsp;— Lecture seule
               </span>
             </div>
             <form action={exitPreview}>

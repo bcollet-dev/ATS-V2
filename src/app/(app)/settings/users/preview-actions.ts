@@ -45,6 +45,33 @@ export async function startPreview(userId: string) {
   redirect("/dashboard");
 }
 
+export async function startRolePreview(role: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const adminProfile = await db.query.profiles.findFirst({
+    where: and(
+      eq(profiles.id, user.id),
+      eq(profiles.active, true),
+      isNull(profiles.deletedAt),
+    ),
+  });
+  if (!adminProfile || adminProfile.role !== "admin") redirect("/dashboard");
+
+  const validRoles = new Set(["direction", "team_leader", "admissions", "relations_entreprises"]);
+  if (!validRoles.has(role)) return;
+
+  const cookieStore = await cookies();
+  cookieStore.set(PREVIEW_COOKIE, `role:${role}`, {
+    httpOnly: true,
+    sameSite: "lax",
+    path: "/",
+  });
+
+  redirect("/dashboard");
+}
+
 export async function exitPreview() {
   const cookieStore = await cookies();
   cookieStore.delete(PREVIEW_COOKIE);

@@ -3,7 +3,7 @@
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import type { AppRole } from "@/lib/permissions";
-import { startPreview } from "./preview-actions";
+import { startPreview, startRolePreview } from "./preview-actions";
 import { Eye } from "lucide-react";
 
 const ROLE_LABELS: Record<AppRole, string> = {
@@ -37,6 +37,13 @@ type UserRow = {
   createdAt: string;
 };
 
+const ROLE_PREVIEW_OPTIONS: { role: string; label: string }[] = [
+  { role: "admissions",            label: "Recruteur" },
+  { role: "relations_entreprises", label: "Relation entreprise" },
+  { role: "team_leader",           label: "Team Leader" },
+  { role: "direction",             label: "Direction" },
+];
+
 export function UsersClient({
   users,
   currentUserId,
@@ -47,6 +54,30 @@ export function UsersClient({
   isAdmin: boolean;
 }) {
   return (
+    <div className="space-y-6">
+    {isAdmin && (
+      <section className="rounded-lg border bg-card">
+        <div className="px-5 py-3.5 border-b">
+          <p className="text-sm font-semibold">Prévisualiser un rôle</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Voir l'interface telle qu'elle apparaît pour ce rôle.
+          </p>
+        </div>
+        <div className="px-5 py-4 flex flex-wrap gap-2">
+          {ROLE_PREVIEW_OPTIONS.map(({ role, label }) => (
+            <form key={role} action={startRolePreview.bind(null, role)}>
+              <button
+                type="submit"
+                className="flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm hover:bg-muted transition-colors"
+              >
+                <Eye className="h-3.5 w-3.5 text-muted-foreground" />
+                {label}
+              </button>
+            </form>
+          ))}
+        </div>
+      </section>
+    )}
     <section className="rounded-lg border bg-card divide-y">
       {users.length === 0 && (
         <p className="px-5 py-6 text-sm text-center text-muted-foreground">Aucun utilisateur.</p>
@@ -103,5 +134,6 @@ export function UsersClient({
         );
       })}
     </section>
+    </div>
   );
 }
