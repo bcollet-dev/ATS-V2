@@ -10,8 +10,6 @@ import {
   matchings,
   candidates,
   candidateFormations,
-  needCursus,
-  cursus,
 } from "@/db/schema";
 import { eq, and, desc, isNull } from "drizzle-orm";
 import { createStorageClient } from "@/lib/supabase/server";

@@ -17,7 +17,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { cn } from "@/lib/utils";
 import { createEntreprise } from "@/app/(app)/annuaire/create-actions";
 import { lookupSiret, type RegistryData } from "@/app/(app)/annuaire/siret-actions";
 import {
