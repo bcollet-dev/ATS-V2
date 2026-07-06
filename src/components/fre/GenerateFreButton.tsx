@@ -41,29 +41,36 @@ export function GenerateFreButton({
 
   function handleGenerate(event: React.MouseEvent<HTMLButtonElement>) {
     event.stopPropagation();
-    const targetTab = window.open("", "_blank", "noopener,noreferrer");
+    // noopener causes window.open to return null — open without it so we can
+    // control the tab (close on error, navigate on success).
+    const targetTab = window.open("", "_blank");
     startTransition(async () => {
-      const result = await generateFre(needId, candidateId ? { candidateId } : {});
-      if (!result.success) {
-        targetTab?.close();
-        toast.error(result.error);
-        return;
-      }
+      try {
+        const result = await generateFre(needId, candidateId ? { candidateId } : {});
+        if (!result.success) {
+          targetTab?.close();
+          toast.error(result.error);
+          return;
+        }
 
-      if (targetTab) {
-        targetTab.location.href = result.signedUrl;
-      } else {
-        window.open(result.signedUrl, "_blank", "noopener,noreferrer");
+        if (targetTab) {
+          targetTab.location.href = result.signedUrl;
+        } else {
+          window.open(result.signedUrl, "_blank", "noopener,noreferrer");
+        }
+        onGenerated?.({
+          id: result.documentId,
+          fileName: result.fileName,
+          extractionStatus: null,
+          createdAt: result.createdAt,
+          kind: "generated",
+        });
+        toast.success("FRE générée et ouverte");
+        router.refresh();
+      } catch {
+        targetTab?.close();
+        toast.error("Erreur lors de la génération de la FRE");
       }
-      onGenerated?.({
-        id: result.documentId,
-        fileName: result.fileName,
-        extractionStatus: null,
-        createdAt: result.createdAt,
-        kind: "generated",
-      });
-      toast.success("FRE générée et ouverte");
-      router.refresh();
     });
   }
 

@@ -1724,7 +1724,7 @@ function buildContratPayload(draft: YpareoPlacementDraft) {
     dureeHebdomadaireTravailHeures: duration.hours,
     dureeHebdomadaireTravailMinutes: duration.minutes,
     remunerationsAnnuelles: remuneration.map((line, index) => ({
-      ordre: `${index + 1}.1`,
+      ordre: String(index + 1),
       dateDebut: line.debut,
       dateFin: line.fin,
       taux: line.pourcentage,
