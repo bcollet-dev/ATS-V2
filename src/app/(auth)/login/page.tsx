@@ -1,8 +1,5 @@
-import { signIn } from "./actions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 
 export default async function LoginPage({
   searchParams,
@@ -27,7 +24,6 @@ export default async function LoginPage({
             <CardDescription>Accès réservé aux membres de l'équipe EDA Groupe</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Google OAuth — Route Handler GET pour redirect externe */}
             <a href="/auth/google" className="block w-full">
               <Button variant="outline" className="w-full gap-2">
                 <GoogleIcon />
@@ -35,53 +31,13 @@ export default async function LoginPage({
               </Button>
             </a>
 
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-card px-2 text-muted-foreground">ou</span>
-              </div>
-            </div>
-
-            {/* Email / mot de passe */}
-            <form action={signIn} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  name="email"
-                  type="email"
-                  placeholder="prenom.nom@eda-rh.fr"
-                  required
-                  autoComplete="email"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="password">Mot de passe</Label>
-                <Input
-                  id="password"
-                  name="password"
-                  type="password"
-                  required
-                  autoComplete="current-password"
-                />
-              </div>
-
-              {error && (
-                <p className="text-sm text-destructive text-center">
-                  {error === "unauthorized"
-                    ? "Accès non autorisé. Contactez votre administrateur."
-                    : error === "oauth"
-                    ? "Une erreur est survenue. Réessayez ou contactez l'administrateur."
-                    : "Email ou mot de passe incorrect."}
-                </p>
-              )}
-              <Button type="submit" className="w-full">
-                Se connecter
-              </Button>
-            </form>
+            {error && (
+              <p className="text-sm text-destructive text-center">
+                {error === "unauthorized"
+                  ? "Accès non autorisé. Contactez votre administrateur."
+                  : "Une erreur est survenue. Réessayez ou contactez l'administrateur."}
+              </p>
+            )}
           </CardContent>
         </Card>
 
