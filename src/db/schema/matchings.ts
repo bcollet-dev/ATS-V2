@@ -36,6 +36,9 @@ export const matchings = pgTable(
 
     classId: uuid("class_id").references(() => classes.id, { onDelete: "set null" }),
 
+    ypareoContratId: text("ypareo_contrat_id"),
+    ypareoInscriptionId: text("ypareo_inscription_id"),
+
     refusalReason: text("refusal_reason"),
     notes: text("notes"),
 

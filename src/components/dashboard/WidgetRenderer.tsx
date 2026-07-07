@@ -15,6 +15,7 @@ import { WidgetComparatif } from "./widgets/WidgetComparatif";
 import { WidgetActiviteConseillers } from "./widgets/WidgetActiviteConseillers";
 import { WidgetNouvellesInscriptions } from "./widgets/WidgetNouvellesInscriptions";
 import { WidgetNouveauxBesoins } from "./widgets/WidgetNouveauxBesoins";
+import { WidgetRupturesEnCours } from "./widgets/WidgetRupturesEnCours";
 
 interface WidgetRendererProps {
   widget: WidgetConfig;
@@ -50,6 +51,8 @@ export function WidgetRenderer({ widget, scope, startYear }: WidgetRendererProps
       return <WidgetNouvellesInscriptions scope={scope} />;
     case "nouveaux_besoins":
       return <WidgetNouveauxBesoins scope={scope} />;
+    case "ruptures_en_cours":
+      return <WidgetRupturesEnCours />;
     default:
       return (
         <div className="flex items-center justify-center h-full text-sm text-muted-foreground">

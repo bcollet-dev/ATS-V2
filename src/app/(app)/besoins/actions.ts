@@ -113,7 +113,7 @@ export type NeedRow = {
   activeMatchingsCount: number;
   waitingFreCandidatesCount: number;
   interviewCandidatesCount: number;
-  needCandidates: Array<{ matchingId: string; candidateId: string; firstName: string; propositionStatus: string; isFrozen: boolean }>;
+  needCandidates: Array<{ matchingId: string; candidateId: string; firstName: string; propositionStatus: string; isFrozen: boolean; ypareoContratId: string | null; ypareoInscriptionId: string | null }>;
 };
 
 export async function loadPipelineNeeds(): Promise<NeedRow[]> {
@@ -168,6 +168,8 @@ export async function loadPipelineNeeds(): Promise<NeedRow[]> {
         firstName: candidates.firstName,
         propositionStatus: matchings.propositionStatus,
         isFrozen: matchings.isFrozen,
+        ypareoContratId: matchings.ypareoContratId,
+        ypareoInscriptionId: matchings.ypareoInscriptionId,
       })
       .from(matchings)
       .innerJoin(candidates, eq(matchings.candidateId, candidates.id))
@@ -188,14 +190,14 @@ export async function loadPipelineNeeds(): Promise<NeedRow[]> {
     }
   }
 
-  const candidatesByNeed = new Map<string, Array<{ matchingId: string; candidateId: string; firstName: string; propositionStatus: string; isFrozen: boolean }>>();
+  const candidatesByNeed = new Map<string, Array<{ matchingId: string; candidateId: string; firstName: string; propositionStatus: string; isFrozen: boolean; ypareoContratId: string | null; ypareoInscriptionId: string | null }>>();
   const activeCountMap = new Map<string, number>();
   const waitingFreCountMap = new Map<string, number>();
   const interviewCountMap = new Map<string, number>();
   for (const r of candidateRows) {
     const nid = r.needId as string;
     if (!candidatesByNeed.has(nid)) candidatesByNeed.set(nid, []);
-    candidatesByNeed.get(nid)!.push({ matchingId: r.matchingId, candidateId: r.candidateId, firstName: r.firstName, propositionStatus: r.propositionStatus, isFrozen: r.isFrozen });
+    candidatesByNeed.get(nid)!.push({ matchingId: r.matchingId, candidateId: r.candidateId, firstName: r.firstName, propositionStatus: r.propositionStatus, isFrozen: r.isFrozen, ypareoContratId: r.ypareoContratId ?? null, ypareoInscriptionId: r.ypareoInscriptionId ?? null });
     activeCountMap.set(nid, (activeCountMap.get(nid) ?? 0) + 1);
     if (r.propositionStatus === "waiting_fre") {
       waitingFreCountMap.set(nid, (waitingFreCountMap.get(nid) ?? 0) + 1);

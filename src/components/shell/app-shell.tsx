@@ -14,10 +14,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Mail, Pencil } from "lucide-react";
+import { Mail, Pencil, HelpCircle } from "lucide-react";
 import { signOut } from "@/app/(auth)/login/actions";
 import { NotificationBell } from "./NotificationBell";
 import { EditNameModal } from "@/app/(app)/onboarding/EditNameModal";
+import { OnboardingModal } from "./OnboardingModal";
 import type { profiles } from "@/db/schema";
 import type { InferSelectModel } from "drizzle-orm";
 
@@ -34,16 +35,19 @@ const ROLE_LABELS: Record<Profile["role"], string> = {
 export function AppShell({
   user,
   unreadCount,
+  showOnboarding,
   children,
 }: {
   user: Profile;
   unreadCount: number;
+  showOnboarding?: boolean;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
   const isAdmin = user.role === "admin" || user.role === "direction";
   const isSuperAdmin = user.role === "admin";
   const [editNameOpen, setEditNameOpen] = useState(false);
+  const [onboardingOpen, setOnboardingOpen] = useState(showOnboarding ?? false);
   const gmailConnectHref = `/auth/gmail/connect?next=${encodeURIComponent(pathname || "/dashboard")}`;
   const mobileNavItems = [
     ...navItems,
@@ -148,6 +152,13 @@ export function AppShell({
 
         {/* User footer */}
         <div className="border-t p-2">
+          <button
+            onClick={() => setOnboardingOpen(true)}
+            className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-xs text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground transition-colors mb-1"
+          >
+            <HelpCircle className="h-3.5 w-3.5 shrink-0" />
+            Guide de l'application
+          </button>
           <div className="flex items-center gap-1 mb-1">
             <DropdownMenu>
             <DropdownMenuTrigger
@@ -209,6 +220,13 @@ export function AppShell({
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-1">
+            <button
+              onClick={() => setOnboardingOpen(true)}
+              className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent/50"
+              aria-label="Guide de l'application"
+            >
+              <HelpCircle className="h-4 w-4" />
+            </button>
             <NotificationBell unreadCount={unreadCount} />
             <DropdownMenu>
               <DropdownMenuTrigger
@@ -291,6 +309,10 @@ export function AppShell({
         open={editNameOpen}
         onClose={() => setEditNameOpen(false)}
         currentName={user.fullName}
+      />
+      <OnboardingModal
+        open={onboardingOpen}
+        onClose={() => setOnboardingOpen(false)}
       />
     </div>
   );

@@ -6,7 +6,7 @@ import {
   candidates, needs, tasks, activityEvents, matchings, classes, cursus,
   profiles,
 } from "@/db/schema";
-import { eq, and, isNull, lt, inArray, gte, lte, desc, asc, count, max, sql, or } from "drizzle-orm";
+import { eq, and, isNull, isNotNull, lt, inArray, gte, lte, desc, asc, count, max, sql, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { currentSchoolYear, schoolYearFromStart } from "@/lib/dashboard/school-year";
 import type { DashboardScope } from "./DashboardClient";
@@ -649,4 +649,42 @@ export async function getNouveauxBesoinsData(scope: DashboardScope): Promise<{
     prev7: p7[0]?.cnt ?? 0,
     prev30: p30[0]?.cnt ?? 0,
   };
+}
+
+// ─── Ruptures en cours ────────────────────────────────────────────────────────
+
+export type RuptureEnCours = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  ruptureRechercheDeadline: string;
+};
+
+export async function getRupturesEnCours(): Promise<RuptureEnCours[]> {
+  await requireAuth();
+  const rows = await db
+    .select({
+      id: candidates.id,
+      firstName: candidates.firstName,
+      lastName: candidates.lastName,
+      ruptureRechercheDeadline: candidates.ruptureRechercheDeadline,
+    })
+    .from(candidates)
+    .where(
+      and(
+        eq(candidates.status, "contract_break"),
+        isNull(candidates.deletedAt),
+        isNotNull(candidates.ruptureRechercheDeadline),
+      )
+    )
+    .orderBy(asc(candidates.ruptureRechercheDeadline));
+
+  return rows
+    .filter((r) => r.ruptureRechercheDeadline !== null)
+    .map((r) => ({
+      id: r.id,
+      firstName: r.firstName,
+      lastName: r.lastName,
+      ruptureRechercheDeadline: r.ruptureRechercheDeadline!,
+    }));
 }

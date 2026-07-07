@@ -98,4 +98,11 @@ export const WIDGET_REGISTRY: WidgetMeta[] = [
     defaultWidth: 4,
     defaultHeight: 3,
   },
+  {
+    type: "ruptures_en_cours",
+    label: "Ruptures en cours",
+    description: "Candidats en rupture de contrat avec délai de recherche 6 mois",
+    defaultWidth: 6,
+    defaultHeight: 4,
+  },
 ];

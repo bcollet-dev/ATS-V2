@@ -23,6 +23,7 @@ export const profiles = pgTable("profiles", {
   sigPhone: text("sig_phone"),
   sigLinkedinUrl: text("sig_linkedin_url"),
   sigInstagramUrl: text("sig_instagram_url"),
+  onboardingCompletedAt: timestamp("onboarding_completed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),

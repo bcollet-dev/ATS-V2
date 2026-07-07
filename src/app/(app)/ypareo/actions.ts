@@ -814,6 +814,7 @@ async function applyYpareoPlacementPipelineState(
   draft: YpareoPlacementDraft,
   state: "placed" | "waiting_fre",
   selectedClassId: string | null,
+  ypareoIds?: { contratId: string | null; inscriptionId: string | null },
 ) {
   if (!draft.candidateId || !draft.needId) return;
 
@@ -824,6 +825,8 @@ async function applyYpareoPlacementPipelineState(
     isFrozen: false,
     updatedAt: now,
     ...(selectedClassId ? { classId: selectedClassId } : {}),
+    ...(ypareoIds?.contratId ? { ypareoContratId: ypareoIds.contratId } : {}),
+    ...(ypareoIds?.inscriptionId ? { ypareoInscriptionId: ypareoIds.inscriptionId } : {}),
   };
 
   if (draft.matchingId) {
@@ -1430,7 +1433,11 @@ export async function pushYpareoPlacement(
       .set({ status: "success", responsePayload: response ?? {}, responseStatus: 200 })
       .where(eq(ypareoLogs.id, log.id));
 
-    await applyYpareoPlacementPipelineState(draft, "placed", selectedClassId);
+    const finalContratId = existingContractId ?? clean((response as Record<string, unknown> | null)?.id);
+    await applyYpareoPlacementPipelineState(draft, "placed", selectedClassId, {
+      contratId: finalContratId ?? null,
+      inscriptionId: inscriptionStatus.inscriptionId ?? null,
+    });
 
     return { success: true };
   } catch (err) {

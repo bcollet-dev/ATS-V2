@@ -192,6 +192,26 @@ export default async function CandidatPage({
               Sur Ypareo
             </Badge>
           )}
+          {candidat.status === "contract_break" && candidat.ruptureRechercheDeadline && (() => {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const d = new Date(candidat.ruptureRechercheDeadline);
+            d.setHours(0, 0, 0, 0);
+            const diffDays = Math.floor((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+            const label = diffDays < 0
+              ? `Délai dépassé (${Math.abs(diffDays)}j)`
+              : `Délai : ${d.toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })} (${diffDays}j)`;
+            const cls = diffDays < 0
+              ? "bg-red-100 text-red-700"
+              : diffDays <= 30
+                ? "bg-amber-100 text-amber-700"
+                : "bg-muted text-muted-foreground";
+            return (
+              <Badge className={`text-xs font-medium px-2 py-1 rounded-md border-0 ${cls}`}>
+                {label}
+              </Badge>
+            );
+          })()}
           {canDeleteCandidate && (
             <DeleteEntityButton
               entityType="candidate"

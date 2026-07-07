@@ -25,13 +25,14 @@ type Props = {
 };
 
 const WIDGET_TITLES: Record<string, string> = {
-  relances:          "Relances",
-  taux_placement:    "Taux de placement",
-  statuts_besoins:   "Statuts besoins",
-  besoins_perdus:    "Besoins perdus",
-  pipeline_cursus:   "Pipeline par cursus",
-  placements_classe: "Placements par classe",
-  sources_lead:      "Sources du lead",
+  relances:           "Relances",
+  taux_placement:     "Taux de placement",
+  statuts_besoins:    "Statuts besoins",
+  besoins_perdus:     "Besoins perdus",
+  pipeline_cursus:    "Pipeline par cursus",
+  placements_classe:  "Placements par classe",
+  sources_lead:       "Sources du lead",
+  ruptures_en_cours:  "Ruptures en cours",
 };
 
 const SCHOOL_YEARS = availableSchoolYears(4);

@@ -449,3 +449,53 @@ export async function fetchYpareoActionFormation(actionId: string): Promise<unkn
 export async function fetchYpareoFormation(formationId: string): Promise<unknown> {
   return request(`/formation/${formationId}`, { method: "GET" });
 }
+
+// ─── Rupture & Abandon ────────────────────────────────────────────────────────
+
+export const MOTIFS_RUPTURE_CONTRAT = [
+  { code: 1,  label: "À l'initiative de l'employeur" },
+  { code: 2,  label: "À l'initiative de l'apprenti" },
+  { code: 3,  label: "À l'initiative des deux parties" },
+  { code: 4,  label: "Commun accord" },
+  { code: 5,  label: "Obtention du diplôme avant le terme" },
+  { code: 6,  label: "Force majeure" },
+  { code: 7,  label: "Faute grave de l'employeur" },
+  { code: 8,  label: "Faute grave de l'apprenti" },
+  { code: 9,  label: "Décès de l'apprenti" },
+  { code: 10, label: "Décès de l'employeur" },
+  { code: 11, label: "Autre" },
+] as const;
+
+export type MotifRuptureCode = (typeof MOTIFS_RUPTURE_CONTRAT)[number]["code"];
+
+export type YpareoMotifDepart = { id: string; nom: string };
+
+export async function postRuptureContrat(
+  contratId: string,
+  body: { date: string; motif: MotifRuptureCode; commentaire?: string },
+): Promise<void> {
+  await request(`/contrat-apprentissage/${contratId}/rupture`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function postCreerDepart(
+  inscriptionId: string,
+  body: { dateDepart: string; idMotifDepart: string },
+): Promise<void> {
+  await request(`/inscription/${inscriptionId}/creer-depart`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function getMotifDepart(): Promise<YpareoMotifDepart[]> {
+  const payload = await request("/motif-depart?ShowArchive=false&ShowMasque=false&Skip=0&Top=200", {
+    method: "GET",
+  });
+  const items = records(payload as JsonRecord);
+  return items
+    .filter((item) => item.id && item.nom)
+    .map((item) => ({ id: String(item.id), nom: String(item.nom) }));
+}

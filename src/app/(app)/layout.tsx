@@ -47,7 +47,7 @@ export default async function AppLayout({
 
   return (
     <TaskContextProvider>
-      <AppShell user={user} unreadCount={unreadCount}>
+      <AppShell user={user} unreadCount={unreadCount} showOnboarding={!user.onboardingCompletedAt}>
         <NotificationListener userId={user.id} />
         {!user.nameConfirmed && !user._isPreview && <ConfirmNameModal defaultName={user.fullName} />}
         {user._isPreview && (

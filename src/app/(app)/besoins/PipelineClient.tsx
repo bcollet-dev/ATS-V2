@@ -19,6 +19,7 @@ import { KanbanPipeline } from "./KanbanPipeline";
 import { PipelineList } from "./PipelineList";
 import { NeedDrawer } from "./NeedDrawer";
 import { YpareoPlacementModal } from "@/components/ypareo/YpareoPlacementModal";
+import { RuptureDialog } from "@/components/ypareo/RuptureDialog";
 import { pushYpareoPlacement } from "@/app/(app)/ypareo/actions";
 import type { YpareoPlacementDraft } from "@/lib/ypareo/placement-draft";
 import { toast } from "sonner";
@@ -26,9 +27,6 @@ import { toast } from "sonner";
 const ARCHIVED = new Set(["lost"]);
 type ViewMode = "kanban" | "list";
 type Tab = "pipeline" | "archives";
-
-// Statuts nécessitant un motif
-const REASON_REQUIRED = new Set(["rupture", "lost"]);
 
 // Statuts qui régressent hors zone matching
 const DEGRADE_STATUSES = new Set(["ad_chase", "prospect"]);
@@ -477,6 +475,12 @@ export function PipelineClient({
     id: string; status: string; title: string; matchingsCount: number;
   } | null>(null);
   const [pendingYpareo, setPendingYpareo] = useState<{ id: string } | null>(null);
+  const [pendingRupture, setPendingRupture] = useState<{
+    needId: string;
+    matchingId: string;
+    ypareoInscriptionId: string | null;
+    candidateName: string;
+  } | null>(null);
   const [, startTransition] = useTransition();
 
   const [needs, setOptimistic] = useOptimistic(
@@ -498,7 +502,22 @@ export function PipelineClient({
   const pendingTitle = pendingNeed ? `${pendingNeed.title} — ${pendingNeed.companyName}` : "";
 
   function handleStatusChange(id: string, status: string) {
-    if (REASON_REQUIRED.has(status)) {
+    if (status === "rupture") {
+      const need = needs.find((n) => n.id === id);
+      const placed = need?.needCandidates.find((c) => c.propositionStatus === "placed");
+      if (!placed?.ypareoContratId) {
+        toast.error("Aucun contrat Ypareo associé à ce besoin");
+        return;
+      }
+      setPendingRupture({
+        needId: id,
+        matchingId: placed.matchingId,
+        ypareoInscriptionId: placed.ypareoInscriptionId,
+        candidateName: placed.firstName,
+      });
+      return;
+    }
+    if (status === "lost") {
       const need = needs.find((n) => n.id === id);
       setPending({ id, status, activeMatchingsCount: need?.activeMatchingsCount ?? 0 });
       return;
@@ -793,6 +812,15 @@ export function PipelineClient({
         targetLabel="Client"
         onCancel={() => setPendingYpareo(null)}
         onConfirm={handleYpareoConfirm}
+      />
+
+      <RuptureDialog
+        open={!!pendingRupture}
+        matchingId={pendingRupture?.matchingId ?? ""}
+        ypareoInscriptionId={pendingRupture?.ypareoInscriptionId ?? null}
+        candidateName={pendingRupture?.candidateName ?? ""}
+        onSuccess={() => { setPendingRupture(null); router.refresh(); }}
+        onCancel={() => setPendingRupture(null)}
       />
     </div>
   );

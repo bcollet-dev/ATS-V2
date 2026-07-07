@@ -76,6 +76,7 @@ export const candidates = pgTable(
 
     // Ypareo
     ypareoPersonId: text("ypareo_person_id"),
+    ruptureRechercheDeadline: date("rupture_recherche_deadline"),
 
     // Métadonnées
     createdBy: uuid("created_by").references(() => profiles.id, { onDelete: "set null" }),

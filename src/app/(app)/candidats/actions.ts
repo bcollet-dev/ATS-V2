@@ -19,7 +19,7 @@ export type CandidatRow = {
   updatedAt: string;
   isInactive: boolean;
   nextTaskOverdue: boolean;
-  needMatchings: Array<{ matchingId: string; needId: string; needTitle: string; propositionStatus: string; isFrozen: boolean }>;
+  needMatchings: Array<{ matchingId: string; needId: string; needTitle: string; propositionStatus: string; isFrozen: boolean; ypareoContratId: string | null; ypareoInscriptionId: string | null }>;
 };
 
 export async function loadPipelineCandidates(): Promise<CandidatRow[]> {
@@ -67,6 +67,8 @@ export async function loadPipelineCandidates(): Promise<CandidatRow[]> {
         needTitle: needs.title,
         propositionStatus: matchings.propositionStatus,
         isFrozen: matchings.isFrozen,
+        ypareoContratId: matchings.ypareoContratId,
+        ypareoInscriptionId: matchings.ypareoInscriptionId,
       })
       .from(matchings)
       .innerJoin(needs, eq(matchings.needId, needs.id))
@@ -86,11 +88,11 @@ export async function loadPipelineCandidates(): Promise<CandidatRow[]> {
     }
   }
 
-  const needMatchingsByCandidate = new Map<string, Array<{ matchingId: string; needId: string; needTitle: string; propositionStatus: string; isFrozen: boolean }>>();
+  const needMatchingsByCandidate = new Map<string, Array<{ matchingId: string; needId: string; needTitle: string; propositionStatus: string; isFrozen: boolean; ypareoContratId: string | null; ypareoInscriptionId: string | null }>>();
   for (const r of matchingRows) {
     const cid = r.candidateId as string;
     if (!needMatchingsByCandidate.has(cid)) needMatchingsByCandidate.set(cid, []);
-    needMatchingsByCandidate.get(cid)!.push({ matchingId: r.matchingId, needId: r.needId, needTitle: r.needTitle, propositionStatus: r.propositionStatus, isFrozen: r.isFrozen });
+    needMatchingsByCandidate.get(cid)!.push({ matchingId: r.matchingId, needId: r.needId, needTitle: r.needTitle, propositionStatus: r.propositionStatus, isFrozen: r.isFrozen, ypareoContratId: r.ypareoContratId ?? null, ypareoInscriptionId: r.ypareoInscriptionId ?? null });
   }
 
   const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition, useOptimistic } from "react";
 import { useRouter } from "next/navigation";
-import { LayoutGrid, List, Plus, Archive, Users, Trash2 } from "lucide-react";
+import { LayoutGrid, List, Plus, Archive, Users, Trash2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Modal, ModalContent, ModalHeader, ModalTitle, ModalBody, ModalFooter } from "@/components/ui/modal";
@@ -16,34 +16,62 @@ import { KanbanPipeline } from "./KanbanPipeline";
 import { PipelineList } from "./PipelineList";
 import { RefusModal } from "./RefusModal";
 import { YpareoPlacementModal } from "@/components/ypareo/YpareoPlacementModal";
+import { RuptureDialog } from "@/components/ypareo/RuptureDialog";
 import { pushYpareoPlacement } from "@/app/(app)/ypareo/actions";
+import { triggerAbandon, getMotifsDepartYpareo } from "@/app/(app)/ypareo/rupture-actions";
 import type { YpareoPlacementDraft } from "@/lib/ypareo/placement-draft";
 import { toast } from "sonner";
 
 const ARCHIVED = new Set(["temporary_refusal", "definitive_refusal"]);
 const PRE_ADMISSIBLE = new Set(["to_call", "in_progress", "no_response", "pvpp"]);
 type RefusType = "temporary_refusal" | "definitive_refusal";
+type ArchiveType = "temporary_refusal" | "definitive_refusal" | "abandon";
 type ViewMode = "kanban" | "list";
 type Tab = "pipeline" | "archives";
+
+type MotifDepart = { id: string; nom: string };
 
 function ArchiveDragModal({
   open,
   candidateName,
+  placedMatchingId,
   onConfirm,
+  onAbandon,
   onDelete,
   onCancel,
 }: {
   open: boolean;
   candidateName: string;
+  placedMatchingId: string | null;
   onConfirm: (type: "temporary_refusal" | "definitive_refusal", reason: string) => void;
+  onAbandon: (matchingId: string, motifDepartId: string) => void;
   onDelete: () => void;
   onCancel: () => void;
 }) {
-  const [type, setType] = useState<"temporary_refusal" | "definitive_refusal">("temporary_refusal");
+  const [type, setType] = useState<ArchiveType>("temporary_refusal");
   const [reason, setReason] = useState("");
   const [error, setError] = useState(false);
+  const [motifsDepart, setMotifsDepart] = useState<MotifDepart[]>([]);
+  const [motifDepartId, setMotifDepartId] = useState("");
+  const [loadingMotifs, setLoadingMotifs] = useState(false);
+
+  useEffect(() => {
+    if (type === "abandon" && placedMatchingId && motifsDepart.length === 0) {
+      setLoadingMotifs(true);
+      getMotifsDepartYpareo()
+        .then(setMotifsDepart)
+        .catch(() => toast.error("Impossible de charger les motifs de départ"))
+        .finally(() => setLoadingMotifs(false));
+    }
+  }, [type, placedMatchingId, motifsDepart.length]);
 
   function handleConfirm() {
+    if (type === "abandon") {
+      if (!placedMatchingId || !motifDepartId) { setError(true); return; }
+      setMotifDepartId(""); setError(false);
+      onAbandon(placedMatchingId, motifDepartId);
+      return;
+    }
     if (!reason.trim()) { setError(true); return; }
     const val = reason.trim();
     setReason(""); setError(false);
@@ -51,13 +79,16 @@ function ArchiveDragModal({
   }
 
   function handleCancel() {
-    setReason(""); setError(false); onCancel();
+    setReason(""); setError(false); setType("temporary_refusal"); setMotifDepartId("");
+    onCancel();
   }
 
   function handleDelete() {
     setReason(""); setError(false);
     onDelete();
   }
+
+  const SELECT_CLASS = "flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring";
 
   return (
     <Modal open={open} onOpenChange={(v) => { if (!v) handleCancel(); }}>
@@ -94,21 +125,65 @@ function ArchiveDragModal({
                 <p className="text-xs text-muted-foreground">Le candidat ne sera plus relancé</p>
               </div>
             </label>
+            {placedMatchingId && (
+              <label className="flex items-start gap-3 rounded-md border px-3 py-2.5 cursor-pointer hover:bg-muted/50 transition-colors">
+                <input
+                  type="radio"
+                  checked={type === "abandon"}
+                  onChange={() => setType("abandon")}
+                  className="mt-0.5 accent-primary"
+                />
+                <div>
+                  <p className="text-sm font-medium text-destructive">Abandon</p>
+                  <p className="text-xs text-muted-foreground">Rupture contrat + départ inscription Ypareo à la date du jour</p>
+                </div>
+              </label>
+            )}
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="archive-reason">
-              Motif <span className="text-destructive">*</span>
-            </Label>
-            <textarea
-              id="archive-reason"
-              value={reason}
-              onChange={(e) => { setReason(e.target.value); setError(false); }}
-              placeholder="Ex : profil ne correspond pas au niveau requis, candidat a trouvé autre chose…"
-              className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
-              autoFocus
-            />
-            {error && <p className="text-xs text-destructive">Le motif est obligatoire.</p>}
-          </div>
+
+          {type !== "abandon" && (
+            <div className="space-y-1.5">
+              <Label htmlFor="archive-reason">
+                Motif <span className="text-destructive">*</span>
+              </Label>
+              <textarea
+                id="archive-reason"
+                value={reason}
+                onChange={(e) => { setReason(e.target.value); setError(false); }}
+                placeholder="Ex : profil ne correspond pas au niveau requis, candidat a trouvé autre chose…"
+                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
+                autoFocus
+              />
+              {error && <p className="text-xs text-destructive">Le motif est obligatoire.</p>}
+            </div>
+          )}
+
+          {type === "abandon" && (
+            <div className="space-y-1.5">
+              <Label htmlFor="archive-motif-depart">
+                Motif de départ Ypareo <span className="text-destructive">*</span>
+              </Label>
+              {loadingMotifs ? (
+                <div className="flex items-center gap-2 py-1.5 text-sm text-muted-foreground">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Chargement…
+                </div>
+              ) : (
+                <select
+                  id="archive-motif-depart"
+                  value={motifDepartId}
+                  onChange={(e) => { setMotifDepartId(e.target.value); setError(false); }}
+                  className={SELECT_CLASS}
+                >
+                  <option value="">— Choisir un motif —</option>
+                  {motifsDepart.map((m) => (
+                    <option key={m.id} value={m.id}>{m.nom}</option>
+                  ))}
+                </select>
+              )}
+              {error && <p className="text-xs text-destructive">Sélectionnez un motif de départ.</p>}
+            </div>
+          )}
         </ModalBody>
         <ModalFooter>
           <Button
@@ -125,7 +200,7 @@ function ArchiveDragModal({
           </Button>
           <Button variant="outline" onClick={handleCancel}>Annuler</Button>
           <Button
-            variant={type === "definitive_refusal" ? "destructive" : "default"}
+            variant={type !== "temporary_refusal" ? "destructive" : "default"}
             onClick={handleConfirm}
           >
             Confirmer
@@ -393,8 +468,14 @@ export function PipelineClient({
   const [pendingInterview, setPendingInterview] = useState<{ candidateId: string; candidateName: string; needs: { needId: string; needTitle: string }[] } | null>(null);
   const [pendingCompanyInterview, setPendingCompanyInterview] = useState<{ candidateId: string; candidateName: string; matchings: { matchingId: string; needId: string; needTitle: string }[] } | null>(null);
   const [pendingWaitingFre, setPendingWaitingFre] = useState<{ candidateId: string; candidateName: string; matchings: { matchingId: string; needId: string; needTitle: string }[] } | null>(null);
-  const [pendingArchiveDrop, setPendingArchiveDrop] = useState<{ id: string; name: string } | null>(null);
+  const [pendingArchiveDrop, setPendingArchiveDrop] = useState<{ id: string; name: string; placedMatchingId: string | null } | null>(null);
   const [pendingYpareo, setPendingYpareo] = useState<{ id: string } | null>(null);
+  const [pendingRupture, setPendingRupture] = useState<{
+    candidateId: string;
+    matchingId: string;
+    ypareoInscriptionId: string | null;
+    candidateName: string;
+  } | null>(null);
   const [, startTransition] = useTransition();
 
   const [candidates, setOptimistic] = useOptimistic(
@@ -420,10 +501,27 @@ export function PipelineClient({
     : "";
 
   function handleStatusChange(id: string, status: string) {
+    if (status === "contract_break") {
+      const candidat = candidates.find((c) => c.id === id);
+      const placed = candidat?.needMatchings.find((m) => m.propositionStatus === "placed");
+      const name = candidat ? `${candidat.firstName} ${candidat.lastName}` : "";
+      if (!placed?.ypareoContratId) {
+        toast.error("Aucun contrat Ypareo associé à ce candidat");
+        return;
+      }
+      setPendingRupture({
+        candidateId: id,
+        matchingId: placed.matchingId,
+        ypareoInscriptionId: placed.ypareoInscriptionId,
+        candidateName: name,
+      });
+      return;
+    }
     if (status === "archived_drop") {
       const candidat = candidates.find((c) => c.id === id);
       const name = candidat ? `${candidat.firstName} ${candidat.lastName}` : "";
-      setPendingArchiveDrop({ id, name });
+      const placedWithYpareo = candidat?.needMatchings.find((m) => m.propositionStatus === "placed" && !!m.ypareoInscriptionId);
+      setPendingArchiveDrop({ id, name, placedMatchingId: placedWithYpareo?.matchingId ?? null });
       return;
     }
     if (status === "temporary_refusal" || status === "definitive_refusal") {
@@ -534,6 +632,23 @@ export function PipelineClient({
     startTransition(async () => {
       setOptimistic({ id, status: type });
       await updateCandidateStatus(id, type, reason);
+    });
+  }
+
+  function handleAbandonConfirm(matchingId: string, motifDepartId: string) {
+    if (!pendingArchiveDrop) return;
+    const { id } = pendingArchiveDrop;
+    setPendingArchiveDrop(null);
+    startTransition(async () => {
+      setOptimistic({ id, status: "definitive_refusal" });
+      const result = await triggerAbandon(matchingId, motifDepartId);
+      if (!result.success) {
+        toast.error(result.error ?? "Erreur lors de l'abandon");
+        router.refresh();
+        return;
+      }
+      toast.success("Candidat archivé — abandon enregistré dans Ypareo");
+      router.refresh();
     });
   }
 
@@ -769,9 +884,20 @@ export function PipelineClient({
       <ArchiveDragModal
         open={!!pendingArchiveDrop}
         candidateName={pendingArchiveDrop?.name ?? ""}
+        placedMatchingId={pendingArchiveDrop?.placedMatchingId ?? null}
         onConfirm={handleArchiveDropConfirm}
+        onAbandon={handleAbandonConfirm}
         onDelete={handleArchiveDropDelete}
         onCancel={() => setPendingArchiveDrop(null)}
+      />
+
+      <RuptureDialog
+        open={!!pendingRupture}
+        matchingId={pendingRupture?.matchingId ?? ""}
+        ypareoInscriptionId={pendingRupture?.ypareoInscriptionId ?? null}
+        candidateName={pendingRupture?.candidateName ?? ""}
+        onSuccess={() => { setPendingRupture(null); router.refresh(); }}
+        onCancel={() => setPendingRupture(null)}
       />
 
       <YpareoPlacementModal
