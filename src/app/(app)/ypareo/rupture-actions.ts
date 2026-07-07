@@ -69,6 +69,12 @@ export async function triggerRupture(input: TriggerRuptureInput): Promise<Action
   const candidateId = matching.candidateId as string;
   const needId = matching.needId as string;
 
+  // Le matching ruptured passe toujours en contract_break
+  await db
+    .update(matchings)
+    .set({ propositionStatus: "contract_break", isWinner: false, updatedAt: now })
+    .where(eq(matchings.id, matching.id));
+
   if (input.resteEnFormation) {
     const ruptureDate = new Date(input.date);
     const deadline = new Date(ruptureDate);
@@ -95,7 +101,7 @@ export async function triggerRupture(input: TriggerRuptureInput): Promise<Action
       .where(
         and(
           eq(matchings.candidateId, candidateId),
-          notInArray(matchings.propositionStatus, ["not_retained"]),
+          notInArray(matchings.propositionStatus, ["not_retained", "contract_break"]),
         )
       );
 

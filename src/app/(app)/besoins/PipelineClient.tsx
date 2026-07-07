@@ -31,10 +31,49 @@ type Tab = "pipeline" | "archives";
 // Statuts qui régressent hors zone matching
 const DEGRADE_STATUSES = new Set(["ad_chase", "prospect"]);
 
+function RuptureNeedDecisionModal({
+  open,
+  needTitle,
+  onKeepOpen,
+  onLost,
+  onCancel,
+}: {
+  open: boolean;
+  needTitle: string;
+  onKeepOpen: () => void;
+  onLost: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <Modal open={open} onOpenChange={(o) => { if (!o) onCancel(); }}>
+      <ModalContent className="max-w-md">
+        <ModalHeader>
+          <ModalTitle>Rupture enregistrée</ModalTitle>
+        </ModalHeader>
+        <ModalBody className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Le besoin <span className="font-medium text-foreground">{needTitle}</span> est en rupture.
+            Que souhaitez-vous faire ?
+          </p>
+        </ModalBody>
+        <ModalFooter className="flex-col gap-2 sm:flex-row">
+          <Button variant="outline" className="w-full sm:w-auto" onClick={onKeepOpen}>
+            Toujours à pourvoir — garder en rupture
+          </Button>
+          <Button variant="destructive" className="w-full sm:w-auto" onClick={onLost}>
+            Perdu — clôturer le besoin
+          </Button>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
+  );
+}
+
 function LostModal({
   open,
   needTitle,
   activeMatchingsCount,
+  defaultReason,
   onConfirm,
   onDelete,
   onCancel,
@@ -43,13 +82,18 @@ function LostModal({
   open: boolean;
   needTitle: string;
   activeMatchingsCount: number;
+  defaultReason?: string;
   onConfirm: (reason: string) => void;
   onDelete: () => void;
   onCancel: () => void;
   canDelete?: boolean;
 }) {
-  const [reason, setReason] = useState("");
+  const [reason, setReason] = useState(defaultReason ?? "");
   const [error, setError] = useState(false);
+
+  useEffect(() => {
+    if (open) setReason(defaultReason ?? "");
+  }, [open, defaultReason]);
 
   function handleConfirm() {
     if (!reason.trim()) { setError(true); return; }
@@ -148,7 +192,7 @@ function SelectRetenuModal({
     loadMatchingsForNeed(needId).then((data) => {
       setRows(
         data
-          .filter((m) => !m.isFrozen && m.propositionStatus !== "not_retained" && m.propositionStatus !== "placed")
+          .filter((m) => !m.isFrozen && m.propositionStatus !== "not_retained" && m.propositionStatus !== "placed" && m.propositionStatus !== "contract_break")
           .map((m) => ({ id: m.id, candidateId: m.candidateId, candidateName: m.candidateName, candidateCursus: m.candidateCursus }))
       );
       setLoading(false);
@@ -464,7 +508,7 @@ export function PipelineClient({
   const [tab, setTab] = useState<Tab>("pipeline");
   const [view, setView] = useState<ViewMode>("kanban");
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [pending, setPending] = useState<{ id: string; status: string; activeMatchingsCount: number } | null>(null);
+  const [pending, setPending] = useState<{ id: string; status: string; activeMatchingsCount: number; defaultReason?: string } | null>(null);
   const [pendingRetenu, setPendingRetenu] = useState<{
     id: string; title: string; activeMatchingsCount: number;
   } | null>(null);
@@ -480,6 +524,10 @@ export function PipelineClient({
     matchingId: string;
     ypareoInscriptionId: string | null;
     candidateName: string;
+  } | null>(null);
+  const [pendingRuptureDecision, setPendingRuptureDecision] = useState<{
+    needId: string;
+    needTitle: string;
   } | null>(null);
   const [, startTransition] = useTransition();
 
@@ -772,6 +820,7 @@ export function PipelineClient({
         open={!!pending}
         needTitle={pendingTitle}
         activeMatchingsCount={pending?.activeMatchingsCount ?? 0}
+        defaultReason={pending?.defaultReason}
         onConfirm={handleConfirm}
         onDelete={handlePendingDelete}
         onCancel={() => setPending(null)}
@@ -819,8 +868,26 @@ export function PipelineClient({
         matchingId={pendingRupture?.matchingId ?? ""}
         ypareoInscriptionId={pendingRupture?.ypareoInscriptionId ?? null}
         candidateName={pendingRupture?.candidateName ?? ""}
-        onSuccess={() => { setPendingRupture(null); router.refresh(); }}
+        onSuccess={() => {
+          const needId = pendingRupture!.needId;
+          const need = needs.find((n) => n.id === needId);
+          const needTitle = need ? `${need.title} — ${need.companyName}` : "";
+          setPendingRupture(null);
+          setPendingRuptureDecision({ needId, needTitle });
+        }}
         onCancel={() => setPendingRupture(null)}
+      />
+
+      <RuptureNeedDecisionModal
+        open={!!pendingRuptureDecision}
+        needTitle={pendingRuptureDecision?.needTitle ?? ""}
+        onKeepOpen={() => { setPendingRuptureDecision(null); router.refresh(); }}
+        onLost={() => {
+          const needId = pendingRuptureDecision!.needId;
+          setPendingRuptureDecision(null);
+          setPending({ id: needId, status: "lost", activeMatchingsCount: 0, defaultReason: "Rupture contrat" });
+        }}
+        onCancel={() => { setPendingRuptureDecision(null); router.refresh(); }}
       />
     </div>
   );

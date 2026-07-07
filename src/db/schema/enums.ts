@@ -42,6 +42,7 @@ export const propositionStatus = pgEnum("proposition_status", [
   "waiting_fre",
   "placed",
   "not_retained",
+  "contract_break",
 ]);
 
 export const documentType = pgEnum("document_type", [
