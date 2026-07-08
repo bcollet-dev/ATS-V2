@@ -4,13 +4,8 @@ import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Trash2, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  updateRetentionConfig,
-  triggerPurge,
-  RETENTION_OPTIONS,
-  type RetentionConfig,
-  type PurgeCounts,
-} from "./actions";
+import { updateRetentionConfig, triggerPurge } from "./actions";
+import { RETENTION_OPTIONS, type RetentionConfig, type PurgeCounts } from "./constants";
 
 const SELECT_CLASS =
   "flex h-9 rounded-md border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring";

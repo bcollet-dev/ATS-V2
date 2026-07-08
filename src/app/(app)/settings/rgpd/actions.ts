@@ -6,29 +6,12 @@ import { appSettings, candidates, companies, companyContacts, documents, taskLin
 import { eq, isNotNull } from "drizzle-orm";
 import { createStorageClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import type { RetentionConfig, PurgeCounts } from "./constants";
 
 // ─── Config keys ─────────────────────────────────────────────────────────────
 
 const KEY_CANDIDATES = "rgpd_retention_candidates_days";
 const KEY_COMPANIES  = "rgpd_retention_companies_days";
-
-export const RETENTION_OPTIONS = [
-  { label: "6 mois",  days: 180  },
-  { label: "1 an",    days: 365  },
-  { label: "2 ans",   days: 730  },
-  { label: "3 ans",   days: 1095 },
-  { label: "5 ans",   days: 1825 },
-] as const;
-
-export type RetentionConfig = {
-  candidatesDays: number;
-  companiesDays:  number;
-};
-
-export type PurgeCounts = {
-  candidatesDue: number;
-  companiesDue:  number;
-};
 
 // ─── Readers ─────────────────────────────────────────────────────────────────
 
