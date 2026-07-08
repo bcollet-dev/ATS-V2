@@ -20,7 +20,7 @@ const candidateStatuses = [
   "company_interview",
   "waiting_fre",
   "placed",
-  "contract_break",
+  "rupture",
 ];
 
 const needStatuses = [

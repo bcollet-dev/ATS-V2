@@ -176,7 +176,7 @@ export async function loadPipelineNeeds(): Promise<NeedRow[]> {
       .where(
         and(
           inArray(matchings.needId, needIds),
-          notInArray(matchings.propositionStatus, ["not_retained", "contract_break"]),
+          notInArray(matchings.propositionStatus, ["not_retained", "rupture"]),
           isNull(candidates.deletedAt),
         )
       )

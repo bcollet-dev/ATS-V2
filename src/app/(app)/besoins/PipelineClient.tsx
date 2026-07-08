@@ -192,7 +192,7 @@ function SelectRetenuModal({
     loadMatchingsForNeed(needId).then((data) => {
       setRows(
         data
-          .filter((m) => !m.isFrozen && m.propositionStatus !== "not_retained" && m.propositionStatus !== "placed" && m.propositionStatus !== "contract_break")
+          .filter((m) => !m.isFrozen && m.propositionStatus !== "not_retained" && m.propositionStatus !== "placed" && m.propositionStatus !== "rupture")
           .map((m) => ({ id: m.id, candidateId: m.candidateId, candidateName: m.candidateName, candidateCursus: m.candidateCursus }))
       );
       setLoading(false);

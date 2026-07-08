@@ -315,7 +315,7 @@ export async function getPipelineCursusData(scope: DashboardScope, startYear?: n
       .where(
         and(
           isNull(candidates.deletedAt),
-          sql`${candidates.status}::text != ALL(ARRAY['definitive_refusal','temporary_refusal','contract_break'])`,
+          sql`${candidates.status}::text != ALL(ARRAY['definitive_refusal','temporary_refusal','rupture'])`,
           scope === "personal" ? eq(candidates.ownerId, actor.id) : undefined
         )
       )
@@ -460,7 +460,7 @@ export async function getTauxRuptureData(scope: DashboardScope, startYear?: numb
   );
 
   const [ruptureRow, placedRow] = await Promise.all([
-    db.select({ cnt: count() }).from(candidates).where(and(baseWhere, eq(candidates.status, "contract_break"))),
+    db.select({ cnt: count() }).from(candidates).where(and(baseWhere, eq(candidates.status, "rupture"))),
     db.select({ cnt: count() }).from(candidates).where(and(baseWhere, eq(candidates.status, "placed"))),
   ]);
 
@@ -672,7 +672,7 @@ export async function getRupturesEnCours(): Promise<RuptureEnCours[]> {
     .from(candidates)
     .where(
       and(
-        eq(candidates.status, "contract_break"),
+        eq(candidates.status, "rupture"),
         isNull(candidates.deletedAt),
         isNotNull(candidates.ruptureRechercheDeadline),
       )

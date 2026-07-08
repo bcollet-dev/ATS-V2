@@ -20,7 +20,7 @@ export const candidateStatus = pgEnum("candidate_status", [
   "placed",
   "temporary_refusal",
   "definitive_refusal",
-  "contract_break",
+  "rupture",
 ]);
 
 export const needStatus = pgEnum("need_status", [
@@ -42,7 +42,7 @@ export const propositionStatus = pgEnum("proposition_status", [
   "waiting_fre",
   "placed",
   "not_retained",
-  "contract_break",
+  "rupture",
 ]);
 
 export const documentType = pgEnum("document_type", [

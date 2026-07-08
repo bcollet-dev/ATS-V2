@@ -3,7 +3,7 @@ export const MATCHING_ALLOWED_CANDIDATE_STATUSES = [
   "company_interview",
   "waiting_fre",
   "placed",
-  "contract_break",
+  "rupture",
 ] as const;
 
 export function canCandidateBeMatched(status: string): boolean {

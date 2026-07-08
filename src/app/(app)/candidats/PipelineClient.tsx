@@ -501,7 +501,7 @@ export function PipelineClient({
     : "";
 
   function handleStatusChange(id: string, status: string) {
-    if (status === "contract_break") {
+    if (status === "rupture") {
       const candidat = candidates.find((c) => c.id === id);
       const placed = candidat?.needMatchings.find((m) => m.propositionStatus === "placed");
       const name = candidat ? `${candidat.firstName} ${candidat.lastName}` : "";

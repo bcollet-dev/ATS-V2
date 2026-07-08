@@ -16,7 +16,7 @@ const STATUS_LABELS: Record<string, string> = {
   waiting_fre:       "Attente FRE",
   temporary_refusal: "Refus temporaire",
   definitive_refusal:"Refus définitif",
-  contract_break:    "Rupture",
+  rupture:    "Rupture",
 };
 
 function esc(v: string | null | undefined): string {

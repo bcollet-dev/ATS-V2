@@ -45,7 +45,7 @@ const STATUS_LABELS: Record<string, string> = {
   placed: "Placé",
   temporary_refusal: "Refus temporaire",
   definitive_refusal: "Refus définitif",
-  contract_break: "Rupture",
+  rupture: "Rupture",
 };
 
 const STATUS_BADGE: Record<string, string> = {
@@ -53,7 +53,7 @@ const STATUS_BADGE: Record<string, string> = {
   admissible: "bg-blue-100 text-blue-700",
   waiting_fre: "bg-violet-100 text-violet-700",
   definitive_refusal: "bg-red-100 text-red-700",
-  contract_break: "bg-red-100 text-red-700",
+  rupture: "bg-red-100 text-red-700",
   no_response: "bg-amber-100 text-amber-700",
 };
 
@@ -192,7 +192,7 @@ export default async function CandidatPage({
               Sur Ypareo
             </Badge>
           )}
-          {candidat.status === "contract_break" && candidat.ruptureRechercheDeadline && (() => {
+          {candidat.status === "rupture" && candidat.ruptureRechercheDeadline && (() => {
             const today = new Date();
             today.setHours(0, 0, 0, 0);
             const d = new Date(candidat.ruptureRechercheDeadline);

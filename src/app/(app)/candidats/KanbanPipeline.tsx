@@ -48,26 +48,29 @@ const ACTIVE_STATUSES = [
   { key: "company_interview", label: "Entretien entreprise" },
   { key: "waiting_fre",       label: "Attente FRE" },
   { key: "placed",            label: "Placé" },
-  { key: "contract_break",    label: "Rupture" },
+  { key: "rupture",    label: "Rupture" },
 ] as const;
 
 const PROP_DOT: Record<string, string> = {
-  cv_sent:     "bg-blue-400",
-  interview:   "bg-orange-400",
-  waiting_fre: "bg-amber-400",
-  placed:      "bg-amber-400",
+  cv_sent:        "bg-blue-400",
+  interview:      "bg-orange-400",
+  waiting_fre:    "bg-amber-400",
+  placed:         "bg-amber-400",
+  rupture: "bg-red-400",
 };
 const PROP_CHIP: Record<string, string> = {
-  cv_sent:     "bg-blue-50 text-blue-700",
-  interview:   "bg-orange-50 text-orange-700",
-  waiting_fre: "bg-amber-50 text-amber-700",
-  placed:      "bg-amber-50 text-amber-700",
+  cv_sent:        "bg-blue-50 text-blue-700",
+  interview:      "bg-orange-50 text-orange-700",
+  waiting_fre:    "bg-amber-50 text-amber-700",
+  placed:         "bg-amber-50 text-amber-700",
+  rupture: "bg-red-50 text-red-700",
 };
 const PROP_SHORT: Record<string, string> = {
-  cv_sent:     "CV",
-  interview:   "Entretien",
-  waiting_fre: "Retenu",
-  placed:      "Retenu ★",
+  cv_sent:        "CV",
+  interview:      "Entretien",
+  waiting_fre:    "Retenu",
+  placed:         "Retenu ★",
+  rupture: "Rupture",
 };
 
 const PICKER_STATUSES = [
@@ -87,7 +90,7 @@ const STATUS_STYLES: Record<string, { border: string; badge: string; dot: string
   company_interview: { border: "border-t-purple-400",  badge: "bg-purple-100 text-purple-700",  dot: "bg-purple-400" },
   placed:            { border: "border-t-emerald-400", badge: "bg-emerald-100 text-emerald-700",dot: "bg-emerald-400" },
   waiting_fre:       { border: "border-t-teal-400",    badge: "bg-teal-100 text-teal-700",      dot: "bg-teal-400" },
-  contract_break:    { border: "border-t-red-400",     badge: "bg-red-100 text-red-700",        dot: "bg-red-400" },
+  rupture:    { border: "border-t-red-400",     badge: "bg-red-100 text-red-700",        dot: "bg-red-400" },
 };
 
 function initials(name: string) {

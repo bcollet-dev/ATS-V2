@@ -26,7 +26,7 @@ const CAND_STATUS_LABEL: Record<string, string> = {
   company_interview: "Entretien entreprise",
   waiting_fre:       "Attente FRE",
   placed:            "Placé",
-  contract_break:    "Rupture",
+  rupture:    "Rupture",
   temporary_refusal: "Refus temporaire",
   definitive_refusal:"Refus définitif",
 };
@@ -41,7 +41,7 @@ const CAND_STATUS_BADGE: Record<string, string> = {
   company_interview: "bg-purple-100 text-purple-700",
   waiting_fre:       "bg-teal-100 text-teal-700",
   placed:            "bg-emerald-100 text-emerald-700",
-  contract_break:    "bg-red-100 text-red-700",
+  rupture:    "bg-red-100 text-red-700",
   temporary_refusal: "bg-gray-100 text-gray-600",
   definitive_refusal:"bg-red-100 text-red-700",
 };
