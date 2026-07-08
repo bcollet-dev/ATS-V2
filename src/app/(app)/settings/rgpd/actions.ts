@@ -3,7 +3,7 @@
 import { requireRole } from "@/lib/auth";
 import { db } from "@/db";
 import { appSettings, candidates, companies, companyContacts, documents, taskLinks } from "@/db/schema";
-import { eq, isNotNull, lt, sql } from "drizzle-orm";
+import { eq, isNotNull } from "drizzle-orm";
 import { createStorageClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
@@ -57,16 +57,6 @@ export async function getPurgeCounts(config: RetentionConfig): Promise<PurgeCoun
   const cutoffCandidates = new Date(Date.now() - config.candidatesDays * 86400_000);
   const cutoffCompanies  = new Date(Date.now() - config.companiesDays  * 86400_000);
 
-  const [cRows, coRows] = await Promise.all([
-    db.select({ count: sql<number>`count(*)::int` })
-      .from(candidates)
-      .where(isNotNull(candidates.deletedAt)),
-    db.select({ count: sql<number>`count(*)::int` })
-      .from(companies)
-      .where(isNotNull(companies.deletedAt)),
-  ]);
-
-  // Filter in JS since drizzle doesn't support lt on nullable timestamps easily
   const [allCandidates, allCompanies] = await Promise.all([
     db.select({ deletedAt: candidates.deletedAt }).from(candidates).where(isNotNull(candidates.deletedAt)),
     db.select({ deletedAt: companies.deletedAt  }).from(companies ).where(isNotNull(companies.deletedAt )),
@@ -114,11 +104,6 @@ export async function runPurge(): Promise<{ purgedCandidates: number; purgedComp
   const supabase = await createStorageClient();
 
   // ── Candidates ─────────────────────────────────────────────────────────────
-  const expiredCandidates = await db
-    .select({ id: candidates.id })
-    .from(candidates)
-    .where(isNotNull(candidates.deletedAt));
-  const toDeleteCandidates = expiredCandidates.filter(async () => true); // filtered below
   const candidatesDue = (await db
     .select({ id: candidates.id, deletedAt: candidates.deletedAt })
     .from(candidates)
@@ -127,7 +112,6 @@ export async function runPurge(): Promise<{ purgedCandidates: number; purgedComp
 
   let purgedCandidates = 0;
   for (const { id } of candidatesDue) {
-    // Delete storage files
     const docs = await db
       .select({ storagePath: documents.storagePath })
       .from(documents)
@@ -135,7 +119,6 @@ export async function runPurge(): Promise<{ purgedCandidates: number; purgedComp
     if (docs.length > 0) {
       await supabase.storage.from("documents").remove(docs.map(d => d.storagePath));
     }
-    // Hard delete (taskLinks first due to FK)
     await db.delete(taskLinks).where(eq(taskLinks.entityId, id));
     await db.delete(candidates).where(eq(candidates.id, id));
     purgedCandidates++;
