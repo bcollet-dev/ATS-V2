@@ -24,7 +24,7 @@ export type TriggerRuptureInput = {
   motifDepartId?: string;
 };
 
-type ActionResult = { success: true } | { success: false; error: string };
+type ActionResult = { success: true } | { success: false; error: string } | { success: "partial"; error: string };
 
 export async function triggerRupture(input: TriggerRuptureInput): Promise<ActionResult> {
   await requireAuth();
@@ -44,6 +44,7 @@ export async function triggerRupture(input: TriggerRuptureInput): Promise<Action
   if (!matching) return { success: false, error: "Matching introuvable" };
   if (!matching.ypareoContratId) return { success: false, error: "Aucun contrat Ypareo associé à ce matching" };
 
+  // Rupture contrat — un 400 signifie probablement "déjà appliquée" : on continue pour syncer la DB
   try {
     await postRuptureContrat(matching.ypareoContratId, {
       date: input.date,
@@ -51,19 +52,29 @@ export async function triggerRupture(input: TriggerRuptureInput): Promise<Action
       ...(input.commentaire ? { commentaire: input.commentaire } : {}),
     });
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Erreur Ypareo lors de la rupture contrat" };
+    const msg = err instanceof Error ? err.message : "";
+    if (!msg.includes("400")) {
+      return { success: false, error: msg || "Erreur Ypareo lors de la rupture contrat" };
+    }
+    // 400 = rupture déjà enregistrée côté Ypareo → on synchronise quand même la DB
   }
 
+  // Départ inscription — si ça échoue on met quand même la DB à jour et on signale l'erreur partielle
+  let departError: string | null = null;
   if (!input.resteEnFormation) {
-    if (!matching.ypareoInscriptionId) return { success: false, error: "Aucune inscription Ypareo pour créer le départ" };
-    if (!input.motifDepartId) return { success: false, error: "Motif de départ requis" };
-    try {
-      await postCreerDepart(matching.ypareoInscriptionId, {
-        dateDepart: input.date,
-        idMotifDepart: input.motifDepartId,
-      });
-    } catch (err) {
-      return { success: false, error: err instanceof Error ? err.message : "Erreur Ypareo lors du départ inscription" };
+    if (!matching.ypareoInscriptionId) {
+      departError = "Aucune inscription Ypareo pour créer le départ";
+    } else if (!input.motifDepartId) {
+      departError = "Motif de départ requis";
+    } else {
+      try {
+        await postCreerDepart(matching.ypareoInscriptionId, {
+          dateDepart: input.date,
+          idMotifDepart: input.motifDepartId,
+        });
+      } catch (err) {
+        departError = err instanceof Error ? err.message : "Erreur Ypareo lors du départ inscription";
+      }
     }
   }
 
@@ -122,6 +133,9 @@ export async function triggerRupture(input: TriggerRuptureInput): Promise<Action
 
   revalidatePath("/candidats");
   revalidatePath("/besoins");
+  if (departError) {
+    return { success: "partial", error: `Rupture enregistrée dans Ypareo mais départ inscription non créé : ${departError}` };
+  }
   return { success: true };
 }
 

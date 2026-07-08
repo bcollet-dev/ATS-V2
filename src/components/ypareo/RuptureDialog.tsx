@@ -73,15 +73,19 @@ export function RuptureDialog({
         resteEnFormation,
         motifDepartId: resteEnFormation ? undefined : motifDepartId,
       });
-      if (!result.success) {
+      if (result.success === false) {
         toast.error(result.error);
         return;
       }
-      toast.success(
-        resteEnFormation
-          ? "Rupture enregistrée — délai de 6 mois activé"
-          : "Rupture enregistrée — candidat archivé"
-      );
+      if (result.success === "partial") {
+        toast.warning(`Rupture enregistrée, mais : ${result.error}`);
+      } else {
+        toast.success(
+          resteEnFormation
+            ? "Rupture enregistrée — délai de 6 mois activé"
+            : "Rupture enregistrée — candidat archivé"
+        );
+      }
       onSuccess();
     });
   }
