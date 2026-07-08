@@ -2,8 +2,9 @@
 
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useTransition } from "react";
+import { useTransition, useState } from "react";
 import { toast } from "sonner";
+import { AlertTriangle } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -17,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { createCandidat } from "@/app/(app)/annuaire/create-actions";
+import { createCandidat, type SimilarCandidate } from "@/app/(app)/annuaire/create-actions";
 import {
   createCandidatSchema,
   type CreateCandidatInput,
@@ -32,6 +33,8 @@ interface CandidatDrawerProps {
 
 export function CandidatDrawer({ open, onOpenChange, onCreated, cursus }: CandidatDrawerProps) {
   const [isPending, startTransition] = useTransition();
+  const [duplicates, setDuplicates] = useState<SimilarCandidate[] | null>(null);
+  const [pendingData, setPendingData] = useState<CreateCandidatInput | null>(null);
 
   const {
     register,
@@ -51,10 +54,15 @@ export function CandidatDrawer({ open, onOpenChange, onCreated, cursus }: Candid
     },
   });
 
-  function onSubmit(data: CreateCandidatInput) {
+  function doCreate(data: CreateCandidatInput, force: boolean) {
     startTransition(async () => {
-      const result = await createCandidat(data);
+      const result = await createCandidat(data, force);
       if (!result.success) {
+        if (result.duplicates) {
+          setDuplicates(result.duplicates);
+          setPendingData(data);
+          return;
+        }
         if (result.field === "email") {
           setError("email", { message: result.error });
         } else {
@@ -64,9 +72,24 @@ export function CandidatDrawer({ open, onOpenChange, onCreated, cursus }: Candid
       }
       toast.success(`${result.data.firstName} ${result.data.lastName} créé`);
       reset();
+      setDuplicates(null);
+      setPendingData(null);
       onOpenChange(false);
       onCreated?.(result.data.id);
     });
+  }
+
+  function onSubmit(data: CreateCandidatInput) {
+    doCreate(data, false);
+  }
+
+  function handleForce() {
+    if (pendingData) doCreate(pendingData, true);
+  }
+
+  function handleCancelDuplicate() {
+    setDuplicates(null);
+    setPendingData(null);
   }
 
   return (
@@ -138,7 +161,37 @@ export function CandidatDrawer({ open, onOpenChange, onCreated, cursus }: Candid
               )}
             </div>
           </SheetBody>
-          <SheetFooter>
+
+          {duplicates && (
+            <div className="px-6 pb-4">
+              <div className="rounded-md border border-amber-200 bg-amber-50 p-3 space-y-2">
+                <div className="flex items-center gap-2 text-amber-800 text-sm font-medium">
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                  Candidat(s) similaire(s) déjà enregistré(s)
+                </div>
+                <ul className="space-y-0.5 pl-6 text-sm text-amber-700">
+                  {duplicates.map((d) => (
+                    <li key={d.id}>
+                      {d.firstName} {d.lastName.toUpperCase()}
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-xs text-amber-600">
+                  Vérifiez qu&apos;il ne s&apos;agit pas du même candidat avant de continuer.
+                </p>
+                <div className="flex gap-2 pt-1">
+                  <Button size="sm" variant="outline" onClick={handleCancelDuplicate} disabled={isPending}>
+                    Annuler
+                  </Button>
+                  <Button size="sm" onClick={handleForce} disabled={isPending}>
+                    {isPending ? "Création…" : "Créer quand même"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <SheetFooter className={cn(duplicates && "hidden")}>
             <Button
               type="button"
               variant="outline"

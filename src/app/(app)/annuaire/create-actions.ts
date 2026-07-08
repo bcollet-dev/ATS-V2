@@ -11,31 +11,82 @@ import {
 } from "./schemas";
 import type { RegistryData } from "./siret-actions";
 
+// ─── Helpers doublon ──────────────────────────────────────────────────────────
+
+function normalize(s: string): string {
+  return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
+}
+
+function levenshtein(a: string, b: string): number {
+  const m = a.length, n = b.length;
+  const dp: number[][] = Array.from({ length: m + 1 }, (_, i) =>
+    Array.from({ length: n + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0))
+  );
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1]
+        ? dp[i - 1][j - 1]
+        : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+    }
+  }
+  return dp[m][n];
+}
+
+function isSimilar(a: string, b: string, threshold: number): boolean {
+  const na = normalize(a), nb = normalize(b);
+  if (na === nb) return true;
+  const maxLen = Math.max(na.length, nb.length);
+  return maxLen > 0 && levenshtein(na, nb) <= threshold;
+}
+
+export type SimilarCandidate = { id: string; firstName: string; lastName: string };
+
 type ActionResult<T> =
   | { success: true; data: T }
-  | { success: false; error: string; field?: string };
+  | { success: false; error: string; field?: string; duplicates?: SimilarCandidate[] };
 
 // ─── Candidat ────────────────────────────────────────────────────────────────
 
 export async function createCandidat(
-  input: CreateCandidatInput
+  input: CreateCandidatInput,
+  force = false
 ): Promise<ActionResult<{ id: string; firstName: string; lastName: string }>> {
   const parsed = createCandidatSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: "Données invalides" };
 
   const { firstName, lastName, phone, email, cursusEnvisage } = parsed.data;
 
-  const existing = await db.query.candidates.findFirst({
+  // Email exact → blocage dur
+  const emailMatch = await db.query.candidates.findFirst({
     where: and(eq(candidates.email, email.toLowerCase()), isNull(candidates.deletedAt)),
     columns: { id: true, firstName: true, lastName: true },
   });
-
-  if (existing) {
+  if (emailMatch) {
     return {
       success: false,
-      error: `Email déjà utilisé par ${existing.firstName} ${existing.lastName}`,
+      error: `Email déjà utilisé par ${emailMatch.firstName} ${emailMatch.lastName}`,
       field: "email",
     };
+  }
+
+  // Similarité nom/prénom → warning soft (sauf si force)
+  if (!force) {
+    const all = await db
+      .select({ id: candidates.id, firstName: candidates.firstName, lastName: candidates.lastName })
+      .from(candidates)
+      .where(isNull(candidates.deletedAt));
+
+    const similar = all.filter(
+      (c) => isSimilar(c.lastName, lastName, 1) && isSimilar(c.firstName, firstName, 2)
+    );
+
+    if (similar.length > 0) {
+      return {
+        success: false,
+        error: "Des candidats au nom similaire existent déjà.",
+        duplicates: similar,
+      };
+    }
   }
 
   const [created] = await db
