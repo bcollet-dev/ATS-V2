@@ -3,14 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { UserPlus, Users, Bell } from "lucide-react";
+import { UserPlus, Users, Bell, ShieldCheck } from "lucide-react";
 
 function NavLink({
   href,
   label,
   icon: Icon,
 }: {
-  href: "/settings/invitations" | "/settings/users" | "/settings/notifications";
+  href: "/settings/invitations" | "/settings/users" | "/settings/notifications" | "/settings/rgpd";
   label: string;
   icon: React.ElementType;
 }) {
@@ -41,6 +41,7 @@ export function SettingsNav() {
       <NavLink href="/settings/invitations" label="Invitations" icon={UserPlus} />
       <NavLink href="/settings/users" label="Utilisateurs" icon={Users} />
       <NavLink href="/settings/notifications" label="Notifications" icon={Bell} />
+      <NavLink href="/settings/rgpd" label="RGPD" icon={ShieldCheck} />
     </aside>
   );
 }
