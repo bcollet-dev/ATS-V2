@@ -58,6 +58,7 @@ import type {
 import { and, asc, desc, eq, inArray, isNull, notInArray } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
+import { sendSlackNotification, buildPlacementBlocks } from "@/lib/slack";
 
 type PairRow = {
   matchingId: string;
@@ -1146,6 +1147,48 @@ export async function loadYpareoPlacementDraft(
   };
 }
 
+// ─── Slack notification helpers ───────────────────────────────────────────────
+
+async function sendPlacementSlackNotification(
+  draft: YpareoPlacementDraft,
+  selectedClassId: string | null,
+): Promise<void> {
+  try {
+    if (!selectedClassId) return;
+    const [classRow, candidateRow, companyRow] = await Promise.all([
+      db.select({ name: classes.name, slackWebhookUrl: classes.slackWebhookUrl })
+        .from(classes).where(eq(classes.id, selectedClassId)).limit(1),
+      draft.candidateId
+        ? db.select({ firstName: candidates.firstName, lastName: candidates.lastName })
+            .from(candidates).where(eq(candidates.id, draft.candidateId)).limit(1)
+        : Promise.resolve([]),
+      draft.companyId
+        ? db.select({ name: companies.name })
+            .from(companies).where(eq(companies.id, draft.companyId)).limit(1)
+        : Promise.resolve([]),
+    ]);
+
+    const cls = classRow[0];
+    if (!cls?.slackWebhookUrl) return;
+
+    const contractSection = draft.sections.find((s) => s.title === "Contrat");
+    const contractStartDate =
+      contractSection?.fields.find((f) => f.label === "Date de debut d'execution")?.value ?? null;
+
+    const cand = (candidateRow as { firstName: string; lastName: string }[])[0];
+    const comp = (companyRow as { name: string }[])[0];
+    const candidateName = cand ? `${cand.firstName} ${cand.lastName.toUpperCase()}` : "Candidat";
+    const companyName = comp?.name ?? "Entreprise";
+
+    await sendSlackNotification(
+      cls.slackWebhookUrl,
+      buildPlacementBlocks({ candidateName, companyName, className: cls.name, contractStartDate }),
+    );
+  } catch {
+    // Non-blocking — Slack errors must never break the placement flow
+  }
+}
+
 // ─── Push placement ───────────────────────────────────────────────────────────
 
 export async function pushYpareoPlacement(
@@ -1438,6 +1481,8 @@ export async function pushYpareoPlacement(
       contratId: finalContratId ?? null,
       inscriptionId: inscriptionStatus.inscriptionId ?? null,
     });
+
+    void sendPlacementSlackNotification(draft, selectedClassId);
 
     return { success: true };
   } catch (err) {

@@ -3,8 +3,9 @@
 import { requireAuth } from "@/lib/auth";
 import { can, type AppRole } from "@/lib/permissions";
 import { db } from "@/db";
-import { matchings, candidates, needs, companies, cursus, documents, profiles, companyContacts, mailTemplates } from "@/db/schema";
-import { eq, isNull, and, asc, notInArray, inArray } from "drizzle-orm";
+import { matchings, candidates, needs, companies, classes, cursus, needCursus, appSettings, documents, profiles, companyContacts, mailTemplates } from "@/db/schema";
+import { sendSlackNotification, buildFreBlocks, buildEntretienBlocks } from "@/lib/slack";
+import { eq, isNull, isNotNull, and, asc, notInArray, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { createStorageClient } from "@/lib/supabase/server";
 import { logActivityEvent } from "@/lib/activity";
@@ -292,6 +293,98 @@ export async function syncCandidateStatusFromMatchings(candidateId: string): Pro
   }
 }
 
+// ─── Slack helpers ───────────────────────────────────────────────────────────
+
+async function sendFreSlackFromMatching(row: {
+  firstName: string;
+  lastName: string;
+  needId: string;
+  classId: string | null;
+}): Promise<void> {
+  try {
+    const [needRow] = await db
+      .select({ companyId: needs.companyId })
+      .from(needs)
+      .where(eq(needs.id, row.needId))
+      .limit(1);
+
+    const companyId = needRow?.companyId;
+    const companyName = companyId
+      ? (await db.select({ name: companies.name }).from(companies).where(eq(companies.id, companyId)).limit(1))[0]?.name ?? "Entreprise"
+      : "Entreprise";
+
+    const candidateName = `${row.firstName} ${row.lastName.toUpperCase()}`;
+
+    let targets: { name: string; slackWebhookUrl: string }[];
+
+    if (row.classId) {
+      const [cls] = await db
+        .select({ name: classes.name, slackWebhookUrl: classes.slackWebhookUrl })
+        .from(classes).where(eq(classes.id, row.classId)).limit(1);
+      targets = cls?.slackWebhookUrl ? [{ name: cls.name, slackWebhookUrl: cls.slackWebhookUrl }] : [];
+    } else {
+      // Classe pas encore choisie : remonter via needCursus pour trouver les canaux liés au besoin
+      const rows = await db
+        .select({ name: classes.name, slackWebhookUrl: classes.slackWebhookUrl })
+        .from(needCursus)
+        .innerJoin(cursus, eq(needCursus.cursusId, cursus.id))
+        .innerJoin(classes, eq(classes.cursusId, cursus.id))
+        .where(and(eq(needCursus.needId, row.needId), eq(classes.active, true), isNotNull(classes.slackWebhookUrl)));
+      targets = rows.filter((r): r is { name: string; slackWebhookUrl: string } => r.slackWebhookUrl !== null);
+    }
+
+    if (targets.length === 0) return;
+
+    await Promise.all(
+      targets.map((cls) =>
+        sendSlackNotification(cls.slackWebhookUrl, buildFreBlocks({ candidateName, companyName, className: cls.name }))
+      )
+    );
+  } catch {
+    // Non-blocking
+  }
+}
+
+async function getGlobalWebhookUrl(): Promise<string | null> {
+  const [row] = await db
+    .select({ value: appSettings.value })
+    .from(appSettings)
+    .where(eq(appSettings.key, "slack_global_webhook"))
+    .limit(1);
+  const val = row?.value;
+  return typeof val === "string" && val ? val : null;
+}
+
+async function sendEntretienSlackNotification(row: {
+  firstName: string;
+  lastName: string;
+  needId: string;
+}): Promise<void> {
+  try {
+    const [webhookUrl, needRow] = await Promise.all([
+      getGlobalWebhookUrl(),
+      db.select({ companyId: needs.companyId }).from(needs).where(eq(needs.id, row.needId)).limit(1),
+    ]);
+
+    if (!webhookUrl) return;
+
+    const companyId = needRow[0]?.companyId;
+    const companyName = companyId
+      ? (await db.select({ name: companies.name }).from(companies).where(eq(companies.id, companyId)).limit(1))[0]?.name ?? "Entreprise"
+      : "Entreprise";
+
+    await sendSlackNotification(
+      webhookUrl,
+      buildEntretienBlocks({
+        candidateName: `${row.firstName} ${row.lastName.toUpperCase()}`,
+        companyName,
+      }),
+    );
+  } catch {
+    // Non-blocking
+  }
+}
+
 // ─── Mutations ────────────────────────────────────────────────────────────────
 
 type CreateResult =
@@ -353,6 +446,7 @@ export async function updateMatchingStatus(
       candidateId: matchings.candidateId,
       firstName: candidates.firstName,
       lastName: candidates.lastName,
+      classId: matchings.classId,
     })
     .from(matchings)
     .innerJoin(candidates, eq(matchings.candidateId, candidates.id))
@@ -382,6 +476,21 @@ export async function updateMatchingStatus(
       actionType: "matching_status_changed",
       summary: `${row.firstName} ${row.lastName} passé en ${statusLabels[status] ?? status}`,
     });
+    if (status === "waiting_fre") {
+      void sendFreSlackFromMatching({
+        firstName: row.firstName,
+        lastName: row.lastName,
+        needId: row.needId,
+        classId: row.classId,
+      });
+    }
+    if (status === "interview") {
+      void sendEntretienSlackNotification({
+        firstName: row.firstName,
+        lastName: row.lastName,
+        needId: row.needId,
+      });
+    }
   }
 
   revalidatePath("/besoins");

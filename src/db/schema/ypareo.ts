@@ -48,6 +48,7 @@ export const classes = pgTable(
     startDate: date("start_date"),
     endDate: date("end_date"),
     active: boolean("active").notNull().default(true),
+    slackWebhookUrl: text("slack_webhook_url"),
     rawData: jsonb("raw_data"),
     syncedAt: timestamp("synced_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

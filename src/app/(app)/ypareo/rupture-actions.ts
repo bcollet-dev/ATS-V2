@@ -2,16 +2,18 @@
 
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/db";
-import { candidates, matchings, needs } from "@/db/schema";
+import { candidates, matchings, needs, companies, appSettings } from "@/db/schema";
 import { eq, and, inArray, notInArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import {
   postRuptureContrat,
   postCreerDepart,
   getMotifDepart,
+  MOTIFS_RUPTURE_CONTRAT,
   type MotifRuptureCode,
 } from "@/lib/ypareo/client";
 import { syncNeedStatusFromMatchings } from "@/app/(app)/matching/actions";
+import { sendSlackNotification, buildRuptureBlocks, buildAbandonBlocks } from "@/lib/slack";
 
 export type TriggerRuptureInput = {
   matchingId: string;
@@ -116,6 +118,8 @@ export async function triggerRupture(input: TriggerRuptureInput): Promise<Action
     }
   }
 
+  void sendRuptureSlack(candidateId, needId, input.motif, input.commentaire);
+
   revalidatePath("/candidats");
   revalidatePath("/besoins");
   return { success: true };
@@ -182,6 +186,8 @@ export async function triggerAbandon(matchingId: string, motifDepartId: string):
     await Promise.all(needIds.map(syncNeedStatusFromMatchings));
   }
 
+  void sendAbandonSlack(candidateId, matching.needId as string);
+
   revalidatePath("/candidats");
   revalidatePath("/besoins");
   return { success: true };
@@ -189,4 +195,67 @@ export async function triggerAbandon(matchingId: string, motifDepartId: string):
 
 export async function getMotifsDepartYpareo() {
   return getMotifDepart();
+}
+
+// ─── Slack helpers ────────────────────────────────────────────────────────────
+
+async function getGlobalWebhookUrl(): Promise<string | null> {
+  const [row] = await db
+    .select({ value: appSettings.value })
+    .from(appSettings)
+    .where(eq(appSettings.key, "slack_global_webhook"))
+    .limit(1);
+  const val = row?.value;
+  return typeof val === "string" && val ? val : null;
+}
+
+async function resolveNames(
+  candidateId: string,
+  needId: string,
+): Promise<{ candidateName: string; companyName: string }> {
+  const [candidateRow, needRow] = await Promise.all([
+    db.select({ firstName: candidates.firstName, lastName: candidates.lastName })
+      .from(candidates).where(eq(candidates.id, candidateId)).limit(1),
+    db.select({ companyId: needs.companyId }).from(needs).where(eq(needs.id, needId)).limit(1),
+  ]);
+  const candidateName = candidateRow[0]
+    ? `${candidateRow[0].firstName} ${candidateRow[0].lastName.toUpperCase()}`
+    : "Candidat";
+  const companyId = needRow[0]?.companyId;
+  const companyName = companyId
+    ? (await db.select({ name: companies.name }).from(companies).where(eq(companies.id, companyId)).limit(1))[0]?.name ?? "Entreprise"
+    : "Entreprise";
+  return { candidateName, companyName };
+}
+
+async function sendRuptureSlack(
+  candidateId: string,
+  needId: string,
+  motifCode: MotifRuptureCode,
+  commentaire?: string,
+): Promise<void> {
+  try {
+    const [webhookUrl, { candidateName, companyName }] = await Promise.all([
+      getGlobalWebhookUrl(),
+      resolveNames(candidateId, needId),
+    ]);
+    if (!webhookUrl) return;
+    const motif = MOTIFS_RUPTURE_CONTRAT.find((m) => m.code === motifCode)?.label;
+    await sendSlackNotification(webhookUrl, buildRuptureBlocks({ candidateName, companyName, motif, commentaire }));
+  } catch {
+    // Non-blocking
+  }
+}
+
+async function sendAbandonSlack(candidateId: string, needId: string): Promise<void> {
+  try {
+    const [webhookUrl, { candidateName, companyName }] = await Promise.all([
+      getGlobalWebhookUrl(),
+      resolveNames(candidateId, needId),
+    ]);
+    if (!webhookUrl) return;
+    await sendSlackNotification(webhookUrl, buildAbandonBlocks({ candidateName, companyName }));
+  } catch {
+    // Non-blocking
+  }
 }

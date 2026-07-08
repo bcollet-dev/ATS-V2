@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { PlusCircle, Tag, ToggleLeft, ToggleRight, RefreshCw, ChevronDown, ChevronRight, Loader2, Trash2 } from "lucide-react";
+import { PlusCircle, Tag, ToggleLeft, ToggleRight, RefreshCw, ChevronDown, ChevronRight, Loader2, Trash2, Webhook, SendHorizonal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Modal, ModalBody, ModalClose, ModalContent, ModalFooter, ModalHeader, ModalTitle } from "@/components/ui/modal";
@@ -12,8 +12,11 @@ import {
   deleteCursus,
   toggleCursusActive,
   syncYpareoCatalog,
+  updateClassSlackWebhook,
+  testClassSlackWebhook,
   type CursusRow,
   type SyncedCursusRow,
+  type ClassRow,
 } from "./actions";
 
 type DeleteTarget = {
@@ -42,6 +45,69 @@ function relativeDate(iso: string): string {
   return `il y a ${days} j`;
 }
 
+
+// ─── Class webhook row ────────────────────────────────────────────────────────
+
+function ClassWebhookRow({ cl }: { cl: ClassRow }) {
+  const [url, setUrl] = useState(cl.slackWebhookUrl ?? "");
+  const [saved, setSaved] = useState(cl.slackWebhookUrl ?? "");
+  const [isSaving, startSave] = useTransition();
+  const [isTesting, startTest] = useTransition();
+
+  function handleSave() {
+    startSave(async () => {
+      const result = await updateClassSlackWebhook(cl.id, url);
+      if (!result.success) {
+        toast.error(result.error);
+        return;
+      }
+      setSaved(url.trim());
+      toast.success("Webhook enregistré");
+    });
+  }
+
+  function handleTest() {
+    startTest(async () => {
+      const result = await testClassSlackWebhook(cl.id);
+      if (!result.success) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Message de test envoyé dans Slack");
+    });
+  }
+
+  const isDirty = url.trim() !== saved;
+
+  return (
+    <div className="flex items-center gap-2 mt-1.5 pt-1.5 border-t border-border/50">
+      <Webhook className="h-3 w-3 text-muted-foreground shrink-0" />
+      <input
+        type="url"
+        placeholder="https://hooks.slack.com/services/…"
+        value={url}
+        onChange={(e) => setUrl(e.target.value)}
+        className="flex-1 min-w-0 text-xs bg-transparent border border-input rounded px-2 py-1 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-ring"
+      />
+      <button
+        onClick={handleSave}
+        disabled={isSaving || !isDirty}
+        className="shrink-0 text-xs px-2 py-1 rounded border border-input bg-background text-foreground hover:bg-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
+        title="Sauvegarder"
+      >
+        {isSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : "Sauvegarder"}
+      </button>
+      <button
+        onClick={handleTest}
+        disabled={isTesting || !saved || isDirty}
+        className="shrink-0 text-xs px-2 py-1 rounded border border-input bg-background text-foreground hover:bg-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
+        title="Envoyer un message de test"
+      >
+        {isTesting ? <Loader2 className="h-3 w-3 animate-spin" /> : <><SendHorizonal className="h-3 w-3" /> Tester</>}
+      </button>
+    </div>
+  );
+}
 
 // ─── Synced cursus card ───────────────────────────────────────────────────────
 
@@ -108,21 +174,24 @@ function SyncedCursusCard({
               <div
                 key={cl.id}
                 className={cn(
-                  "flex items-center gap-3 px-8 py-2.5 text-xs",
+                  "flex flex-col gap-0 px-8 py-2.5 text-xs",
                   !cl.active && "opacity-50"
                 )}
               >
-                <span className="flex-1 min-w-0">
-                  <span className="font-medium">{cl.name}</span>
-                  {cl.code && <span className="ml-1.5 text-muted-foreground">{cl.code}</span>}
-                  {cl.site && <span className="ml-1.5 text-muted-foreground">· {cl.site}</span>}
-                </span>
-                {cl.startDate && (
-                  <span className="text-muted-foreground shrink-0">
-                    {new Date(cl.startDate).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })}
-                    {cl.endDate && ` → ${new Date(cl.endDate).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })}`}
+                <div className="flex items-center gap-3">
+                  <span className="flex-1 min-w-0">
+                    <span className="font-medium">{cl.name}</span>
+                    {cl.code && <span className="ml-1.5 text-muted-foreground">{cl.code}</span>}
+                    {cl.site && <span className="ml-1.5 text-muted-foreground">· {cl.site}</span>}
                   </span>
-                )}
+                  {cl.startDate && (
+                    <span className="text-muted-foreground shrink-0">
+                      {new Date(cl.startDate).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })}
+                      {cl.endDate && ` → ${new Date(cl.endDate).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" })}`}
+                    </span>
+                  )}
+                </div>
+                <ClassWebhookRow cl={cl} />
               </div>
             ))
           )}

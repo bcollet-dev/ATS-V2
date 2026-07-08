@@ -27,6 +27,7 @@ export type ClassRow = {
   startDate: string | null;
   endDate: string | null;
   active: boolean;
+  slackWebhookUrl: string | null;
 };
 
 export type SyncedCursusRow = {
@@ -85,6 +86,7 @@ export async function getSyncedCursusWithClasses(): Promise<SyncedCursusRow[]> {
       startDate: classes.startDate,
       endDate: classes.endDate,
       active: classes.active,
+      slackWebhookUrl: classes.slackWebhookUrl,
     })
     .from(classes)
     .where(inArray(classes.cursusId, cursusIds))
@@ -101,6 +103,7 @@ export async function getSyncedCursusWithClasses(): Promise<SyncedCursusRow[]> {
       startDate: cls.startDate,
       endDate: cls.endDate,
       active: cls.active,
+      slackWebhookUrl: cls.slackWebhookUrl,
     });
     classesMap.set(cls.cursusId, list);
   }
@@ -290,4 +293,46 @@ export async function deleteCursus(id: string): Promise<DeleteCursusResult> {
   } catch {
     return { success: false, error: "Suppression impossible pour ce cursus" };
   }
+}
+
+// ─── Slack webhook per class ──────────────────────────────────────────────────
+
+export async function updateClassSlackWebhook(
+  classId: string,
+  webhookUrl: string,
+): Promise<{ success: true } | { success: false; error: string }> {
+  await requireAuth();
+
+  const url = webhookUrl.trim() || null;
+  if (url && !url.startsWith("https://hooks.slack.com/")) {
+    return { success: false, error: "URL Slack invalide (doit commencer par https://hooks.slack.com/)" };
+  }
+
+  await db
+    .update(classes)
+    .set({ slackWebhookUrl: url, updatedAt: new Date() })
+    .where(eq(classes.id, classId));
+
+  revalidatePath("/cursus");
+  return { success: true };
+}
+
+export async function testClassSlackWebhook(
+  classId: string,
+): Promise<{ success: true } | { success: false; error: string }> {
+  await requireAuth();
+
+  const [cls] = await db
+    .select({ name: classes.name, slackWebhookUrl: classes.slackWebhookUrl })
+    .from(classes)
+    .where(eq(classes.id, classId))
+    .limit(1);
+
+  if (!cls) return { success: false, error: "Classe introuvable" };
+  if (!cls.slackWebhookUrl) return { success: false, error: "Aucun webhook configuré pour cette classe" };
+
+  const { sendSlackNotification, buildTestBlocks } = await import("@/lib/slack");
+  const result = await sendSlackNotification(cls.slackWebhookUrl, buildTestBlocks(cls.name));
+  if (!result.ok) return { success: false, error: result.error };
+  return { success: true };
 }
