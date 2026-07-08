@@ -1179,6 +1179,28 @@ export async function sendMatchingEmails(params: {
   return { results };
 }
 
+export async function getCVPreviewUrl(
+  candidateId: string
+): Promise<{ url: string; fileName: string } | null> {
+  await requireAuth();
+
+  const [doc] = await db
+    .select({ storagePath: documents.storagePath, fileName: documents.fileName })
+    .from(documents)
+    .where(and(eq(documents.candidateId, candidateId), eq(documents.documentType, "cv")))
+    .limit(1);
+
+  if (!doc) return null;
+
+  const supabase = await createStorageClient();
+  const { data, error } = await supabase.storage
+    .from("documents")
+    .createSignedUrl(doc.storagePath, 300);
+
+  if (error || !data) return null;
+  return { url: data.signedUrl, fileName: doc.fileName };
+}
+
 export async function saveMailTemplate(
   name: string,
   subject: string,

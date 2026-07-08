@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
-  Users, Briefcase, MapPin, GraduationCap, User, Paperclip,
+  Users, Briefcase, MapPin, GraduationCap, User, Paperclip, Eye,
   Search, X, RotateCcw, Zap, Link2Off, Mail, Trash2, ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { batchCreateMatchings, deleteMatching } from "./actions";
 import type { MatchingCandidateRow, MatchingNeedRow } from "./actions";
 import { SendEmailModal } from "./SendEmailModal";
+import { CVPreviewModal } from "./CVPreviewModal";
 
 // ─── Status display ───────────────────────────────────────────────────────────
 
@@ -172,12 +173,13 @@ const sel =
 // ─── Candidate card ───────────────────────────────────────────────────────────
 
 function CandidateCard({
-  candidate, checked, onChange, alreadyMatched,
+  candidate, checked, onChange, alreadyMatched, onPreviewCV,
 }: {
   candidate: MatchingCandidateRow;
   checked: boolean;
   onChange: (checked: boolean) => void;
   alreadyMatched: boolean;
+  onPreviewCV?: () => void;
 }) {
   return (
     <label
@@ -231,10 +233,21 @@ function CandidateCard({
 
         <div className="flex items-center gap-2 flex-wrap">
           {candidate.hasCV && (
-            <span className="flex items-center gap-1 text-[11px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded font-medium">
-              <Paperclip className="h-3 w-3" />
-              CV
-            </span>
+            onPreviewCV ? (
+              <button
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onPreviewCV(); }}
+                className="flex items-center gap-1 text-[11px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded font-medium hover:bg-emerald-100 transition-colors"
+                title="Prévisualiser le CV"
+              >
+                <Eye className="h-3 w-3" />
+                CV
+              </button>
+            ) : (
+              <span className="flex items-center gap-1 text-[11px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded font-medium">
+                <Paperclip className="h-3 w-3" />
+                CV
+              </span>
+            )
           )}
           {alreadyMatched && (
             <span className="flex items-center gap-1 text-[11px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded font-medium">
@@ -599,6 +612,7 @@ export function MatchingClient({
   const [isPending, startTransition] = useTransition();
   const [mounted, setMounted] = useState(false);
   const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [cvPreview, setCvPreview] = useState<{ candidateId: string; candidateName: string } | null>(null);
 
   // Filters & sort
   const [candFilters, setCandFilters] = useState<CandFilters>(DEFAULT_CAND);
@@ -862,6 +876,7 @@ export function MatchingClient({
                   checked={selectedCandIds.has(c.id)}
                   onChange={(v) => toggleCand(c.id, v)}
                   alreadyMatched={alreadyMatchedCandIds.has(c.id)}
+                  onPreviewCV={() => setCvPreview({ candidateId: c.id, candidateName: `${c.firstName} ${c.lastName}` })}
                 />
               ))
             )}
@@ -931,6 +946,15 @@ export function MatchingClient({
         selectedCandidates={effectiveCandidatesForModal}
         selectedNeeds={selectedNeedsData}
       />
+
+      {cvPreview && (
+        <CVPreviewModal
+          open={!!cvPreview}
+          candidateId={cvPreview.candidateId}
+          candidateName={cvPreview.candidateName}
+          onClose={() => setCvPreview(null)}
+        />
+      )}
     </>
   );
 }
