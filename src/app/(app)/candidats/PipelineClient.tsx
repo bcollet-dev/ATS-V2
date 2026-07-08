@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition, useOptimistic } from "react";
 import { useRouter } from "next/navigation";
-import { LayoutGrid, List, Plus, Archive, Users, Trash2, Loader2 } from "lucide-react";
+import { LayoutGrid, List, Plus, Archive, Users, Trash2, Loader2, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Modal, ModalContent, ModalHeader, ModalTitle, ModalBody, ModalFooter } from "@/components/ui/modal";
@@ -755,10 +755,18 @@ export function PipelineClient({
             {pipeline.length} actif{pipeline.length !== 1 ? "s" : ""} · {archives.length} archivé{archives.length !== 1 ? "s" : ""}
           </p>
         </div>
-        <Button size="sm" className="w-full gap-1.5 sm:w-auto" onClick={() => setDrawerOpen(true)}>
-          <Plus className="h-3.5 w-3.5" />
-          Nouveau candidat
-        </Button>
+        <div className="flex w-full gap-2 sm:w-auto">
+          <a href="/api/candidats/export" download>
+            <Button size="sm" variant="outline" className="gap-1.5" title="Exporter CSV">
+              <Download className="h-3.5 w-3.5" />
+              Exporter
+            </Button>
+          </a>
+          <Button size="sm" className="flex-1 gap-1.5 sm:flex-none" onClick={() => setDrawerOpen(true)}>
+            <Plus className="h-3.5 w-3.5" />
+            Nouveau candidat
+          </Button>
+        </div>
       </div>
 
       {/* Tabs + view toggle */}
