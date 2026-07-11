@@ -17,3 +17,4 @@ export * from "./candidate-experiences";
 export * from "./candidate-formations";
 export * from "./candidate-skills";
 export * from "./bug-reports";
+export * from "./interviews";
