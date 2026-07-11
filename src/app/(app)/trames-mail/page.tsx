@@ -1,34 +1,18 @@
-import { requireAuth } from "@/lib/auth";
-import { listMailTemplates, loadSignatureData } from "./actions";
-import { TrameMailClient } from "./TrameMailClient";
+import type { Route } from "next";
+import { redirect } from "next/navigation";
 
-export default async function TrameMailPage({
+// Compatibilité : l'onglet Trames mail vit désormais sous /trames/mail.
+// On préserve la query string (retours OAuth Gmail avec ?gmail=…).
+export default async function LegacyTrameMailPage({
   searchParams,
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  const user = await requireAuth();
   const params = await searchParams;
-  const gmailStatus =
-    params.gmail === "connected" ? "connected" :
-    params.gmail === "error"     ? "error" :
-    params.gmail === "no_token"  ? "no_token" :
-    undefined;
-
-  const [templates, sigData] = await Promise.all([
-    listMailTemplates({ includeArchived: true }),
-    loadSignatureData(),
-  ]);
-
-  return (
-    <TrameMailClient
-      initialTemplates={templates}
-      role={user.role}
-      userId={user.id}
-      userName={user.fullName}
-      initialSigData={sigData}
-      hasGmailConnected={!!user.googleRefreshToken}
-      gmailStatus={gmailStatus}
-    />
-  );
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (typeof value === "string") query.set(key, value);
+  }
+  const suffix = query.size > 0 ? `?${query.toString()}` : "";
+  redirect(`/trames/mail${suffix}` as Route);
 }

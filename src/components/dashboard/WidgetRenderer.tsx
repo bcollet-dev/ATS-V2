@@ -16,6 +16,7 @@ import { WidgetActiviteConseillers } from "./widgets/WidgetActiviteConseillers";
 import { WidgetNouvellesInscriptions } from "./widgets/WidgetNouvellesInscriptions";
 import { WidgetNouveauxBesoins } from "./widgets/WidgetNouveauxBesoins";
 import { WidgetRupturesEnCours } from "./widgets/WidgetRupturesEnCours";
+import { WidgetMesTaches } from "./widgets/WidgetMesTaches";
 
 interface WidgetRendererProps {
   widget: WidgetConfig;
@@ -53,6 +54,8 @@ export function WidgetRenderer({ widget, scope, startYear }: WidgetRendererProps
       return <WidgetNouveauxBesoins scope={scope} />;
     case "ruptures_en_cours":
       return <WidgetRupturesEnCours />;
+    case "mes_taches":
+      return <WidgetMesTaches />;
     default:
       return (
         <div className="flex items-center justify-center h-full text-sm text-muted-foreground">

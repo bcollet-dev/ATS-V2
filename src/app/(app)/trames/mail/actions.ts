@@ -104,7 +104,7 @@ export async function saveSignatureData(
       updatedAt: new Date(),
     })
     .where(eq(profiles.id, actor.id));
-  revalidatePath("/trames-mail");
+  revalidatePath("/trames/mail");
   return { success: true };
 }
 
@@ -127,7 +127,7 @@ export async function setDefaultCvNotification(
       .where(eq(mailTemplates.id, id));
   });
 
-  revalidatePath("/trames-mail");
+  revalidatePath("/trames/mail");
   return { success: true };
 }
 
@@ -142,7 +142,7 @@ export async function unsetDefaultCvNotification(
     .set({ isDefaultCvNotification: false, updatedAt: new Date() })
     .where(eq(mailTemplates.id, id));
 
-  revalidatePath("/trames-mail");
+  revalidatePath("/trames/mail");
   return { success: true };
 }
 
@@ -196,7 +196,7 @@ export async function createMailTemplate(
       updatedAt: mailTemplates.updatedAt,
     });
 
-  revalidatePath("/trames-mail");
+  revalidatePath("/trames/mail");
   return {
     success: true,
     data: { ...created, createdByName: actor.fullName, updatedAt: created.updatedAt.toISOString() },
@@ -222,7 +222,7 @@ export async function updateMailTemplate(
     })
     .where(and(eq(mailTemplates.id, id), isNull(mailTemplates.deletedAt)));
 
-  revalidatePath("/trames-mail");
+  revalidatePath("/trames/mail");
   return { success: true };
 }
 
@@ -237,7 +237,7 @@ export async function archiveMailTemplate(
     .set({ active: false, updatedAt: new Date() })
     .where(and(eq(mailTemplates.id, id), isNull(mailTemplates.deletedAt)));
 
-  revalidatePath("/trames-mail");
+  revalidatePath("/trames/mail");
   return { success: true };
 }
 
@@ -256,6 +256,6 @@ export async function deleteMailTemplate(
   if (tpl.active) return { success: false, error: "Archiver la trame avant de la supprimer" };
 
   await db.delete(mailTemplates).where(eq(mailTemplates.id, id));
-  revalidatePath("/trames-mail");
+  revalidatePath("/trames/mail");
   return { success: true };
 }

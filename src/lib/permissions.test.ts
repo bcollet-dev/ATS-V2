@@ -20,6 +20,8 @@ const MATRIX: Record<Permission, AppRole[]> = {
   "companies:delete":     ["admin", "direction"],
   "matchings:create":     ["admin", "direction", "team_leader", "relations_entreprises"],
   "matchings:editStatus": ["admin", "direction", "team_leader", "admissions", "relations_entreprises"],
+  "interviews:conduct":   ["admin", "direction", "team_leader", "admissions"],
+  "interviewTrames:manage": ["admin", "direction"],
   "dashboard:global":     ["admin", "direction", "team_leader"],
   "system:access":        ["admin"],
 };

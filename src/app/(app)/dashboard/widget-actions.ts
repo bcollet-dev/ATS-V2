@@ -3,7 +3,7 @@
 import { requireAuth } from "@/lib/auth";
 import { db } from "@/db";
 import {
-  candidates, needs, tasks, activityEvents, matchings, classes, cursus,
+  candidates, needs, tasks, taskLinks, activityEvents, matchings, classes, cursus,
   profiles,
 } from "@/db/schema";
 import { eq, and, isNull, isNotNull, lt, inArray, gte, lte, desc, asc, count, max, sql, or } from "drizzle-orm";
@@ -687,4 +687,88 @@ export async function getRupturesEnCours(): Promise<RuptureEnCours[]> {
       lastName: r.lastName,
       ruptureRechercheDeadline: r.ruptureRechercheDeadline!,
     }));
+}
+
+// ─── Mes tâches ───────────────────────────────────────────────────────────────
+
+export type MyTaskRow = {
+  id: string;
+  title: string;
+  category: string;
+  dueAt: string;
+  candidateId: string | null;
+  candidateName: string | null;
+  candidateStatus: string | null;
+};
+
+// Tâches ouvertes de l'utilisateur connecté, avec le premier candidat lié
+// (nécessaire au flux entretien : démarrer / non présent).
+export async function getMyTasksData(): Promise<MyTaskRow[]> {
+  const actor = await requireAuth();
+
+  const rows = await db
+    .select({
+      id: tasks.id,
+      title: tasks.title,
+      category: tasks.category,
+      dueAt: tasks.dueAt,
+      legacyCandidateId: tasks.candidateId,
+    })
+    .from(tasks)
+    .where(
+      and(
+        eq(tasks.assignedTo, actor.id),
+        isNull(tasks.completedAt),
+        isNull(tasks.deletedAt),
+      )
+    )
+    .orderBy(asc(tasks.dueAt))
+    .limit(50);
+
+  if (rows.length === 0) return [];
+
+  const taskIds = rows.map((r) => r.id);
+  const linkRows = await db
+    .select({ taskId: taskLinks.taskId, entityId: taskLinks.entityId })
+    .from(taskLinks)
+    .where(and(inArray(taskLinks.taskId, taskIds), eq(taskLinks.entityType, "candidate")))
+    .orderBy(asc(taskLinks.createdAt));
+
+  const candidateByTask = new Map<string, string>();
+  for (const link of linkRows) {
+    if (!candidateByTask.has(link.taskId)) candidateByTask.set(link.taskId, link.entityId);
+  }
+  for (const row of rows) {
+    if (!candidateByTask.has(row.id) && row.legacyCandidateId) {
+      candidateByTask.set(row.id, row.legacyCandidateId);
+    }
+  }
+
+  const candidateIds = [...new Set(candidateByTask.values())];
+  const candidateRows = candidateIds.length
+    ? await db
+        .select({
+          id: candidates.id,
+          firstName: candidates.firstName,
+          lastName: candidates.lastName,
+          status: candidates.status,
+        })
+        .from(candidates)
+        .where(and(inArray(candidates.id, candidateIds), isNull(candidates.deletedAt)))
+    : [];
+  const candidateMap = new Map(candidateRows.map((c) => [c.id, c]));
+
+  return rows.map((r) => {
+    const candidateId = candidateByTask.get(r.id) ?? null;
+    const candidat = candidateId ? candidateMap.get(candidateId) : undefined;
+    return {
+      id: r.id,
+      title: r.title,
+      category: r.category,
+      dueAt: r.dueAt.toISOString(),
+      candidateId: candidat?.id ?? null,
+      candidateName: candidat ? `${candidat.firstName} ${candidat.lastName}` : null,
+      candidateStatus: candidat?.status ?? null,
+    };
+  });
 }

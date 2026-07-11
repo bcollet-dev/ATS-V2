@@ -11,10 +11,10 @@ export async function GET(request: NextRequest) {
   const state       = searchParams.get("state");
   const error       = searchParams.get("error");
   const storedState = request.cookies.get("gmail_oauth_state")?.value;
-  const storedNext  = request.cookies.get("gmail_oauth_next")?.value ?? "/trames-mail";
+  const storedNext  = request.cookies.get("gmail_oauth_next")?.value ?? "/trames/mail";
   const nextPath    = storedNext.startsWith("/") && !storedNext.startsWith("//")
     ? storedNext
-    : "/trames-mail";
+    : "/trames/mail";
 
   function done(path: string) {
     const res = NextResponse.redirect(`${origin}${path}`);
@@ -23,9 +23,9 @@ export async function GET(request: NextRequest) {
     return res;
   }
 
-  if (error === "access_denied") return done("/trames-mail");
+  if (error === "access_denied") return done("/trames/mail");
   if (!code || !state || !storedState || state !== storedState) {
-    return done("/trames-mail?gmail=error");
+    return done("/trames/mail?gmail=error");
   }
 
   const supabase = await createClient();
@@ -44,15 +44,15 @@ export async function GET(request: NextRequest) {
     }).toString(),
   });
 
-  if (!tokenRes.ok) return done("/trames-mail?gmail=error");
+  if (!tokenRes.ok) return done("/trames/mail?gmail=error");
 
   const tokens = await tokenRes.json() as { refresh_token?: string };
-  if (!tokens.refresh_token) return done("/trames-mail?gmail=no_token");
+  if (!tokens.refresh_token) return done("/trames/mail?gmail=no_token");
 
   await db
     .update(profiles)
     .set({ googleRefreshToken: encryptSecret(tokens.refresh_token) })
     .where(eq(profiles.id, user.id));
 
-  return done(nextPath === "/trames-mail" ? "/trames-mail?gmail=connected" : nextPath);
+  return done(nextPath === "/trames/mail" ? "/trames/mail?gmail=connected" : nextPath);
 }

@@ -4,6 +4,7 @@ import {
   Building2,
   GitMerge,
   BookOpen,
+  ClipboardList,
   History,
   ListTodo,
   Mail,
@@ -22,6 +23,11 @@ export const navItems = [
     label: "Candidats",
     href: "/candidats",
     icon: Users,
+  },
+  {
+    label: "Entretiens",
+    href: "/entretiens",
+    icon: ClipboardList,
   },
   {
     label: "Besoins",
@@ -49,8 +55,8 @@ export const navItems = [
     icon: RefreshCw,
   },
   {
-    label: "Trames mail",
-    href: "/trames-mail",
+    label: "Trames",
+    href: "/trames",
     icon: Mail,
   },
 ] as const;

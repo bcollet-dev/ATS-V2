@@ -15,6 +15,8 @@ export type Permission =
   | "companies:delete"
   | "matchings:create"
   | "matchings:editStatus"
+  | "interviews:conduct"
+  | "interviewTrames:manage"
   | "dashboard:global"
   | "system:access";
 
@@ -28,6 +30,8 @@ const PERMISSIONS: Record<Permission, ReadonlySet<AppRole>> = {
   "companies:delete":     new Set(["admin", "direction"]),
   "matchings:create":     new Set(["admin", "direction", "team_leader", "relations_entreprises"]),
   "matchings:editStatus": new Set(["admin", "direction", "team_leader", "admissions", "relations_entreprises"]),
+  "interviews:conduct":   new Set(["admin", "direction", "team_leader", "admissions"]),
+  "interviewTrames:manage": new Set(["admin", "direction"]),
   "dashboard:global":     new Set(["admin", "direction", "team_leader"]),
   "system:access":        new Set(["admin"]),
 };

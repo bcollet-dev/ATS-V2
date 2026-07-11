@@ -85,3 +85,8 @@ export const mailAudience = pgEnum("mail_audience", [
   "need",
   "all",
 ]);
+
+export const interviewStatus = pgEnum("interview_status", [
+  "draft",
+  "completed",
+]);

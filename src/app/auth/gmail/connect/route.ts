@@ -9,10 +9,10 @@ export async function GET(request: NextRequest) {
 
   const url = new URL(request.url);
   const origin = url.origin;
-  const requestedNext = url.searchParams.get("next") ?? "/trames-mail";
+  const requestedNext = url.searchParams.get("next") ?? "/trames/mail";
   const nextPath = requestedNext.startsWith("/") && !requestedNext.startsWith("//")
     ? requestedNext
-    : "/trames-mail";
+    : "/trames/mail";
   const state = crypto.randomUUID();
 
   const params = new URLSearchParams({
