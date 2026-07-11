@@ -19,3 +19,7 @@ Ce choix garantit que le pipeline reflète toujours la réalité opérationnelle
 Les statuts pré-matching du pipeline candidat (A appeler, En cours, NRP, Entretien, PVPP, Admissible) restent manuels. Les statuts Refus temporaire, Refus définitif et Rupture restent manuels sur le candidat. Rupture reste manuel sur le besoin.
 
 Règle de repli : si tous les matchings d'un candidat passent en "Non retenu", le candidat retourne automatiquement en "Admissible". Si tous les matchings d'un besoin passent en "Non retenu", le besoin retourne automatiquement en "Besoin en cours".
+
+## Amendement 2026-07-11 — transitions pré-matching médiées par le flux d'entretien
+
+Les statuts pré-matching restent des décisions du recruteur, mais trois transitions sont désormais médiées par le flux d'entretien de positionnement plutôt que déplacées à la main dans le pipeline : « Candidat non présent » sur une tâche d'entretien passe le candidat en PVPP (uniquement s'il est au statut Entretien EDA), et la finalisation d'un entretien de positionnement applique Admissible ou Refus temporaire/définitif avec motif. La modification a posteriori de la décision d'un entretien ne change le statut que sur confirmation explicite du recruteur. La dérivation automatique post-Admissible par les matchings est inchangée.

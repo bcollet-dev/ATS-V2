@@ -8,6 +8,13 @@ export type WidgetMeta = {
 
 export const WIDGET_REGISTRY: WidgetMeta[] = [
   {
+    type: "mes_taches",
+    label: "Mes tâches",
+    description: "Vos tâches ouvertes, filtrables par catégorie — démarrez les entretiens directement",
+    defaultWidth: 6,
+    defaultHeight: 5,
+  },
+  {
     type: "relances",
     label: "Relances",
     description: "Tâches échues + candidats sans activité depuis 7 jours",

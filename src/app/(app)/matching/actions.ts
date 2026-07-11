@@ -1212,7 +1212,7 @@ export async function saveMailTemplate(
       .insert(mailTemplates)
       .values({ name: name.trim(), subject, body, audience: "company", createdBy: actor.id })
       .returning({ id: mailTemplates.id });
-    revalidatePath("/trames-mail");
+    revalidatePath("/trames/mail");
     return { success: true, id: created.id };
   } catch {
     return { success: false, error: "Erreur lors de l'enregistrement" };

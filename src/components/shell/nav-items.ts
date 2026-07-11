@@ -55,8 +55,8 @@ export const navItems = [
     icon: RefreshCw,
   },
   {
-    label: "Trames mail",
-    href: "/trames-mail",
+    label: "Trames",
+    href: "/trames",
     icon: Mail,
   },
 ] as const;

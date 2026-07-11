@@ -27,6 +27,8 @@ import {
   loadMatchingsForCandidate,
   loadAvailableNeedsForCandidate,
 } from "@/app/(app)/matching/actions";
+import { listCandidateInterviews } from "@/app/(app)/entretiens/actions";
+import { BlocEntretiens } from "./BlocEntretiens";
 import { listCandidateDocuments } from "./document-actions";
 import { loadCandidateTasks } from "./task-actions";
 import { TaskContextScope } from "@/components/tasks/FloatingTaskCreator";
@@ -68,7 +70,7 @@ export default async function CandidatPage({
     getActiveCursus(),
   ]);
 
-  const [candidat, experiences, formations, skills, candidateTasks, activeProfiles, candidateMatchings, availableNeeds, candidateDocs] = await Promise.all([
+  const [candidat, experiences, formations, skills, candidateTasks, activeProfiles, candidateMatchings, availableNeeds, candidateDocs, candidateInterviews] = await Promise.all([
     db.query.candidates.findFirst({
       where: and(eq(candidates.id, id), isNull(candidates.deletedAt)),
     }),
@@ -114,6 +116,7 @@ export default async function CandidatPage({
     loadMatchingsForCandidate(id),
     loadAvailableNeedsForCandidate(id),
     listCandidateDocuments(id),
+    listCandidateInterviews(id),
   ]);
 
   if (!candidat) notFound();
@@ -136,6 +139,7 @@ export default async function CandidatPage({
   const canEditCandidate = can(role, "candidates:edit");
   const canDeleteCandidate = can(role, "candidates:delete");
   const canCreateMatching = can(role, "matchings:create");
+  const canConductInterview = can(role, "interviews:conduct");
   const canGenerateFre = role !== "direction";
   const badgeClass = STATUS_BADGE[candidat.status] ?? "bg-muted text-muted-foreground";
   const freMatching = candidat.status === "waiting_fre"
@@ -275,6 +279,14 @@ export default async function CandidatPage({
           cursus={cursus}
           data={{ cursusEnvisage: candidat.cursusEnvisage, source: candidat.source }}
           canEdit={canEditCandidate}
+        />
+
+        {/* Entretiens */}
+        <BlocEntretiens
+          candidateId={candidat.id}
+          candidateName={`${candidat.firstName} ${candidat.lastName}`}
+          interviews={candidateInterviews}
+          canConduct={canConductInterview}
         />
 
         {/* Tâches */}

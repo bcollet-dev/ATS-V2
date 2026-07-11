@@ -1,58 +1,33 @@
 import { db } from "@/db";
 import { interviews, candidates } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import type { InterviewAnswers, InterviewQuestion } from "@/lib/interview-grid";
+import type { InterviewAnswers, InterviewDecision, InterviewQuestion } from "@/lib/interview-grid";
+import { buildInterviewSummaryPrompt, isValidDecision } from "@/lib/interview-logic";
 
-const RECOMMENDATION_LABELS: Record<string, string> = {
-  favorable: "Favorable",
-  reserve: "Réservé",
-  defavorable: "Défavorable",
-};
-
-function buildPrompt(input: {
-  candidateName: string;
-  cursusName: string | null;
-  questions: InterviewQuestion[];
-  answers: InterviewAnswers;
-  overallNotes: string | null;
-  recommendation: string | null;
-}): string {
-  const lines: string[] = [];
-  lines.push(`Candidat : ${input.candidateName}`);
-  if (input.cursusName) lines.push(`Cursus envisagé : ${input.cursusName}`);
-  if (input.recommendation) {
-    lines.push(`Avis de l'évaluateur : ${RECOMMENDATION_LABELS[input.recommendation] ?? input.recommendation}`);
-  }
-  lines.push("");
-  lines.push("Grille d'entretien :");
-  for (const q of input.questions) {
-    const answer = input.answers[q.id] ?? {};
-    if (q.kind === "score") {
-      const score = answer.score != null ? `${answer.score}/5` : "non noté";
-      lines.push(`- ${q.label} : ${score}${answer.text ? ` — commentaire : ${answer.text}` : ""}`);
-    } else {
-      lines.push(`- ${q.label} : ${answer.text?.trim() || "sans réponse"}`);
-    }
-  }
-  if (input.overallNotes?.trim()) {
-    lines.push("");
-    lines.push(`Notes générales de l'évaluateur : ${input.overallNotes.trim()}`);
-  }
-  return lines.join("\n");
+// Cadre ADR-0005 : l'envoi de données candidat à Anthropic est désactivé tant
+// que la configuration ne l'autorise pas explicitement (décisions DPO en suspens).
+function isAiSummaryEnabled(): boolean {
+  return process.env.AI_INTERVIEW_SUMMARY_ENABLED === "true" && !!process.env.ANTHROPIC_API_KEY;
 }
 
 // Génère le résumé IA d'un entretien terminé et le stocke sur la ligne interviews.
+// Ne lève jamais : un échec est renvoyé comme erreur et ne bloque pas la finalisation.
 export async function generateAndStoreInterviewSummary(
   interviewId: string
 ): Promise<{ success: true; summary: string } | { success: false; error: string }> {
+  if (!isAiSummaryEnabled()) {
+    return { success: false, error: "Résumé IA désactivé — le champ reste modifiable manuellement" };
+  }
+
   const [row] = await db
     .select({
       id: interviews.id,
       cursusName: interviews.cursusName,
-      gridSnapshot: interviews.gridSnapshot,
+      subcategory: interviews.subcategory,
+      questionsSnapshot: interviews.questionsSnapshot,
       answers: interviews.answers,
       overallNotes: interviews.overallNotes,
-      recommendation: interviews.recommendation,
+      decision: interviews.decision,
       firstName: candidates.firstName,
       lastName: candidates.lastName,
     })
@@ -63,13 +38,14 @@ export async function generateAndStoreInterviewSummary(
 
   if (!row) return { success: false, error: "Entretien introuvable" };
 
-  const prompt = buildPrompt({
+  const prompt = buildInterviewSummaryPrompt({
     candidateName: `${row.firstName} ${row.lastName}`,
     cursusName: row.cursusName,
-    questions: (row.gridSnapshot ?? []) as InterviewQuestion[],
+    subcategory: row.subcategory,
+    questions: (row.questionsSnapshot ?? []) as InterviewQuestion[],
     answers: (row.answers ?? {}) as InterviewAnswers,
     overallNotes: row.overallNotes,
-    recommendation: row.recommendation,
+    decision: isValidDecision(row.decision) ? (row.decision as InterviewDecision) : null,
   });
 
   try {
@@ -81,10 +57,10 @@ export async function generateAndStoreInterviewSummary(
       max_tokens: 1024,
       system:
         "Tu es assistant recrutement pour EDA Groupe, un centre de formation en alternance. " +
-        "On te fournit la grille d'évaluation remplie lors de l'entretien de motivation d'un candidat. " +
-        "Rédige un résumé de l'entretien en français, en 4 à 6 phrases, destiné à l'équipe recrutement : " +
-        "profil et motivation du candidat, points forts, points de vigilance, et conclusion alignée sur l'avis de l'évaluateur. " +
-        "Reste factuel, ne complète pas avec des informations absentes de la grille. " +
+        "On te fournit la trame d'évaluation remplie lors de l'entretien d'un candidat. " +
+        "Rédige un résumé de l'entretien en français, en un paragraphe de 4 à 6 phrases, destiné à l'équipe recrutement : " +
+        "profil et motivation du candidat, points forts, points de vigilance, et conclusion cohérente avec la décision de l'évaluateur le cas échéant. " +
+        "Reste factuel, ne complète pas avec des informations absentes de la trame. " +
         "Réponds uniquement avec le résumé, sans titre ni préambule.",
       messages: [{ role: "user", content: prompt }],
     });

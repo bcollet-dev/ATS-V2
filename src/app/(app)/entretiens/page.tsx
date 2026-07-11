@@ -14,7 +14,8 @@ export default async function EntretiensPage() {
     <EntretiensClient
       initialCandidates={interviewCandidates}
       initialCompleted={completedInterviews}
-      canConduct={can(user.role as AppRole, "candidates:edit")}
+      canConduct={can(user.role as AppRole, "interviews:conduct")}
+      canManageTrames={can(user.role as AppRole, "interviewTrames:manage")}
     />
   );
 }
