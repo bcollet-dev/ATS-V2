@@ -15,6 +15,7 @@ import { updateNeedStatus } from "@/app/(app)/besoins/actions";
 import { KanbanPipeline } from "./KanbanPipeline";
 import { PipelineList } from "./PipelineList";
 import { RefusModal } from "./RefusModal";
+import { ScheduleInterviewModal } from "@/components/entretiens/ScheduleInterviewModal";
 import { YpareoPlacementModal } from "@/components/ypareo/YpareoPlacementModal";
 import { RuptureDialog } from "@/components/ypareo/RuptureDialog";
 import { pushYpareoPlacement } from "@/app/(app)/ypareo/actions";
@@ -454,10 +455,12 @@ export function PipelineClient({
   candidates: initial,
   cursus,
   profiles,
+  currentUserId,
 }: {
   candidates: CandidatRow[];
   cursus: { id: string; name: string }[];
   profiles: { id: string; fullName: string }[];
+  currentUserId: string;
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("pipeline");
@@ -470,6 +473,7 @@ export function PipelineClient({
   const [pendingWaitingFre, setPendingWaitingFre] = useState<{ candidateId: string; candidateName: string; matchings: { matchingId: string; needId: string; needTitle: string }[] } | null>(null);
   const [pendingArchiveDrop, setPendingArchiveDrop] = useState<{ id: string; name: string; placedMatchingId: string | null } | null>(null);
   const [pendingYpareo, setPendingYpareo] = useState<{ id: string } | null>(null);
+  const [pendingSchedule, setPendingSchedule] = useState<{ candidateId: string; candidateName: string } | null>(null);
   const [pendingRupture, setPendingRupture] = useState<{
     candidateId: string;
     matchingId: string;
@@ -535,6 +539,7 @@ export function PipelineClient({
     if (status === "interview") {
       const candidat = candidates.find((c) => c.id === id);
       const matchings = candidat?.needMatchings ?? [];
+      const name = candidat ? `${candidat.firstName} ${candidat.lastName}` : "";
       if (matchings.length === 1) {
         const needId = matchings[0].needId;
         startTransition(async () => {
@@ -542,9 +547,9 @@ export function PipelineClient({
           await updateCandidateStatus(id, status);
           await updateNeedStatus(needId, "interview");
         });
+        setPendingSchedule({ candidateId: id, candidateName: name });
         return;
       } else if (matchings.length > 1) {
-        const name = candidat ? `${candidat.firstName} ${candidat.lastName}` : "";
         setPendingInterview({
           candidateId: id,
           candidateName: name,
@@ -552,6 +557,12 @@ export function PipelineClient({
         });
         return;
       }
+      startTransition(async () => {
+        setOptimistic({ id, status });
+        await updateCandidateStatus(id, status);
+      });
+      setPendingSchedule({ candidateId: id, candidateName: name });
+      return;
     }
     if (status === "company_interview") {
       const candidat = candidates.find((c) => c.id === id);
@@ -616,13 +627,14 @@ export function PipelineClient({
 
   function handleInterviewConfirm(selectedNeedIds: string[]) {
     if (!pendingInterview) return;
-    const { candidateId } = pendingInterview;
+    const { candidateId, candidateName } = pendingInterview;
     setPendingInterview(null);
     startTransition(async () => {
       setOptimistic({ id: candidateId, status: "interview" });
       await updateCandidateStatus(candidateId, "interview");
       await Promise.all(selectedNeedIds.map((needId) => updateNeedStatus(needId, "interview")));
     });
+    setPendingSchedule({ candidateId, candidateName });
   }
 
   function handleArchiveDropConfirm(type: "temporary_refusal" | "definitive_refusal", reason: string) {
@@ -872,6 +884,17 @@ export function PipelineClient({
         onConfirm={handleInterviewConfirm}
         onCancel={() => setPendingInterview(null)}
       />
+
+      {pendingSchedule && (
+        <ScheduleInterviewModal
+          open={!!pendingSchedule}
+          onOpenChange={(open) => { if (!open) setPendingSchedule(null); }}
+          candidateId={pendingSchedule.candidateId}
+          candidateName={pendingSchedule.candidateName}
+          profiles={profiles}
+          currentUserId={currentUserId}
+        />
+      )}
 
       <CompanyInterviewModal
         open={!!pendingCompanyInterview}

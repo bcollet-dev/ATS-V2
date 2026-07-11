@@ -8,6 +8,8 @@ import {
   candidates,
   profiles,
   tasks,
+  taskLinks,
+  notifications,
 } from "@/db/schema";
 import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -294,6 +296,76 @@ export async function listTramesForCandidate(candidateId: string): Promise<Trame
       matchesCandidateCursus: !!candidateCursus && r.cursusName === candidateCursus,
     }))
     .sort((a, b) => Number(b.matchesCandidateCursus) - Number(a.matchesCandidateCursus));
+}
+
+// ─── Planification d'un entretien (passage au statut Entretien EDA) ──────────
+
+// Crée la tâche d'entretien (visio ou présentiel) qui alimentera le widget
+// « Mes tâches » et le flux Démarrer / Non présent.
+export async function scheduleInterviewTask(input: {
+  candidateId: string;
+  dueAt: string; // ISO
+  mode: "visio" | "presentiel";
+  assignedTo: string;
+}): Promise<{ success: true } | ActionError> {
+  const user = await requireAuth();
+  const guard = await checkPreviewGuard();
+  if (guard) return guard;
+
+  const candidat = await db.query.candidates.findFirst({
+    where: and(eq(candidates.id, input.candidateId), isNull(candidates.deletedAt)),
+    columns: { id: true, firstName: true, lastName: true },
+  });
+  if (!candidat) return { success: false, error: "Candidat introuvable" };
+
+  const dueAt = new Date(input.dueAt);
+  if (Number.isNaN(dueAt.getTime())) return { success: false, error: "Date d'entretien invalide" };
+
+  const candidateName = `${candidat.firstName} ${candidat.lastName}`;
+  const modeLabel = input.mode === "visio" ? "visio" : "présentiel";
+  const title = `Entretien EDA (${modeLabel}) — ${candidateName}`;
+
+  await db.transaction(async (tx) => {
+    const [createdTask] = await tx
+      .insert(tasks)
+      .values({
+        title,
+        category: input.mode === "visio" ? "video_interview" : "onsite_interview",
+        dueAt,
+        assignedTo: input.assignedTo || null,
+        createdBy: user.id,
+        source: "interview_scheduling",
+      })
+      .returning({ id: tasks.id });
+
+    await tx.insert(taskLinks).values({
+      taskId: createdTask.id,
+      entityType: "candidate",
+      entityId: input.candidateId,
+    });
+  });
+
+  await logActivityEvent({
+    candidateId: input.candidateId,
+    actorId: user.id,
+    actionType: "interview_scheduled",
+    summary: `Entretien EDA planifié (${modeLabel}) le ${dueAt.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })}`,
+  });
+
+  if (input.assignedTo && input.assignedTo !== user.id) {
+    await db.insert(notifications).values({
+      userId: input.assignedTo,
+      type: "task_assigned",
+      title: "Entretien assigné",
+      body: `${user.fullName} vous a assigné : "${title}" — le ${dueAt.toLocaleDateString("fr-FR", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}`,
+      candidateId: input.candidateId,
+    });
+  }
+
+  revalidatePath("/taches");
+  revalidatePath("/dashboard");
+  revalidatePath(`/candidats/${input.candidateId}`);
+  return { success: true };
 }
 
 // ─── Cycle de vie d'un entretien ──────────────────────────────────────────────
