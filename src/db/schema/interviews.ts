@@ -5,23 +5,24 @@ import {
   boolean,
   timestamp,
   jsonb,
-  unique,
   index,
 } from "drizzle-orm/pg-core";
 import { interviewStatus } from "./enums";
 import { cursus } from "./ypareo";
 import { candidates } from "./candidates";
 import { profiles } from "./profiles";
+import { tasks } from "./tasks";
 
-// Grille d'entretien définie par cursus (une grille par cursus).
+// Trame d'entretien définie par la direction. Rattachée optionnellement à un
+// cursus ; la sous-catégorie "Entretien de positionnement" pilote l'admission.
 // questions : InterviewQuestion[] (voir src/lib/interview-grid.ts)
-export const interviewGrids = pgTable(
-  "interview_grids",
+export const interviewTrames = pgTable(
+  "interview_trames",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    cursusId: uuid("cursus_id")
-      .notNull()
-      .references(() => cursus.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    subcategory: text("subcategory").notNull(),
+    cursusId: uuid("cursus_id").references(() => cursus.id, { onDelete: "set null" }),
     questions: jsonb("questions").notNull().default([]),
     active: boolean("active").notNull().default(true),
     createdBy: uuid("created_by").references(() => profiles.id, { onDelete: "set null" }),
@@ -29,13 +30,15 @@ export const interviewGrids = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    unique("interview_grids_cursus_unique").on(t.cursusId),
+    index("interview_trames_cursus_idx").on(t.cursusId),
+    index("interview_trames_subcategory_idx").on(t.subcategory),
   ]
 );
 
-// Entretien EDA passé par un candidat sur la grille de son cursus envisagé.
-// grid_snapshot fige la grille au moment de l'entretien ;
-// answers : InterviewAnswers ({ [questionId]: { score?, text? } })
+// Entretien passé par un candidat. trame_name / subcategory / cursus_name /
+// questions_snapshot figent la trame au moment du démarrage.
+// answers : InterviewAnswers ({ [questionId]: { score?, text?, choice?, choices?, matrix? } })
+// decision : admissible | temporary_refusal | definitive_refusal (positionnement uniquement)
 export const interviews = pgTable(
   "interviews",
   {
@@ -43,15 +46,19 @@ export const interviews = pgTable(
     candidateId: uuid("candidate_id")
       .notNull()
       .references(() => candidates.id, { onDelete: "cascade" }),
-    gridId: uuid("grid_id").references(() => interviewGrids.id, { onDelete: "set null" }),
+    trameId: uuid("trame_id").references(() => interviewTrames.id, { onDelete: "set null" }),
+    trameName: text("trame_name").notNull(),
+    subcategory: text("subcategory").notNull(),
     cursusName: text("cursus_name"),
-    gridSnapshot: jsonb("grid_snapshot").notNull().default([]),
+    questionsSnapshot: jsonb("questions_snapshot").notNull().default([]),
     answers: jsonb("answers").notNull().default({}),
     overallNotes: text("overall_notes"),
-    recommendation: text("recommendation"),
+    decision: text("decision"),
+    refusalReason: text("refusal_reason"),
     status: interviewStatus("status").notNull().default("draft"),
     aiSummary: text("ai_summary"),
     aiSummaryGeneratedAt: timestamp("ai_summary_generated_at", { withTimezone: true }),
+    taskId: uuid("task_id").references(() => tasks.id, { onDelete: "set null" }),
     conductedBy: uuid("conducted_by").references(() => profiles.id, { onDelete: "set null" }),
     completedAt: timestamp("completed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
