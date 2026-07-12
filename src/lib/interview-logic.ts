@@ -105,6 +105,23 @@ export function decisionToCandidateStatus(
   return decision;
 }
 
+// La décision d'un entretien ne s'applique automatiquement au pipeline que si
+// le candidat est encore en phase pré-matching : au-delà (entretien entreprise,
+// attente FRE, placé…), écraser le statut gèlerait ses matchings actifs — la
+// décision est alors enregistrée sur l'entretien sans toucher au pipeline.
+const AUTO_APPLY_STATUSES = new Set([
+  "to_call",
+  "in_progress",
+  "no_response",
+  "interview",
+  "pvpp",
+  "admissible",
+]);
+
+export function canAutoApplyDecision(candidateStatus: string): boolean {
+  return AUTO_APPLY_STATUSES.has(candidateStatus);
+}
+
 export function isValidDecision(value: unknown): value is InterviewDecision {
   return value === "admissible" || value === "temporary_refusal" || value === "definitive_refusal";
 }

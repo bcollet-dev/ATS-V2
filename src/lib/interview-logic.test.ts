@@ -4,6 +4,7 @@ import {
   computeAverageScore,
   decisionToCandidateStatus,
   isValidDecision,
+  canAutoApplyDecision,
   buildInterviewSummaryPrompt,
 } from "./interview-logic";
 import type { InterviewQuestion } from "./interview-grid";
@@ -105,6 +106,15 @@ describe("decisionToCandidateStatus", () => {
     expect(isValidDecision("admissible")).toBe(true);
     expect(isValidDecision("pvpp")).toBe(false);
     expect(isValidDecision(null)).toBe(false);
+  });
+
+  it("n'applique automatiquement la décision qu'en phase pré-matching", () => {
+    for (const status of ["to_call", "in_progress", "no_response", "interview", "pvpp", "admissible"]) {
+      expect(canAutoApplyDecision(status)).toBe(true);
+    }
+    for (const status of ["company_interview", "waiting_fre", "placed", "rupture", "temporary_refusal", "definitive_refusal"]) {
+      expect(canAutoApplyDecision(status)).toBe(false);
+    }
   });
 });
 
