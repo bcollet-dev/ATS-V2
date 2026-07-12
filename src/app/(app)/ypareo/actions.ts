@@ -1542,6 +1542,65 @@ export async function pushYpareoPlacement(
   }
 }
 
+// Rejeu d'un envoi de placement en erreur depuis la page Erreurs : le dossier
+// est reconstruit à l'état actuel des fiches (pas depuis le payload archivé)
+// puis repasse par pushYpareoPlacement — idempotent côté Ypareo (find-or-create).
+export async function replayYpareoPlacement(
+  logId: string,
+): Promise<{ success: boolean; error?: string }> {
+  const actor = await requireAuth();
+  if (!can(actor.role as AppRole, "matchings:editStatus")) {
+    return { success: false, error: "Vous n'avez pas les droits pour rejouer un envoi Ypareo." };
+  }
+
+  const [log] = await db
+    .select({
+      operation: ypareoLogs.operation,
+      status: ypareoLogs.status,
+      requestPayload: ypareoLogs.requestPayload,
+    })
+    .from(ypareoLogs)
+    .where(eq(ypareoLogs.id, logId))
+    .limit(1);
+
+  if (!log) return { success: false, error: "Échange introuvable." };
+  if (log.operation !== "placement") {
+    return { success: false, error: "Seuls les envois de placement sont rejouables — relancez une rupture depuis la fiche candidat." };
+  }
+  if (log.status !== "error") {
+    return { success: false, error: "Seul un échange en erreur peut être rejoué." };
+  }
+
+  const payload = log.requestPayload as { meta?: { source?: string; sourceId?: string; selectedClass?: { id?: unknown } } } | null;
+  const meta = payload?.meta;
+  const source = meta?.source;
+  const sourceId = meta?.sourceId;
+  if ((source !== "candidate" && source !== "need") || !sourceId) {
+    return { success: false, error: "Contexte du placement introuvable dans le journal — relancez depuis le pipeline." };
+  }
+
+  // Retrouver la classe locale à partir de l'identifiant Ypareo archivé
+  let classId: string | null = null;
+  const externalClassId = meta?.selectedClass?.id;
+  if (externalClassId != null && externalClassId !== "") {
+    const [cls] = await db
+      .select({ id: classes.id })
+      .from(classes)
+      .where(eq(classes.externalId, String(externalClassId)))
+      .limit(1);
+    classId = cls?.id ?? null;
+  }
+
+  const draft = await loadYpareoPlacementDraft(source, sourceId);
+  if (draft.blockingIssues.length > 0) {
+    return { success: false, error: `Dossier incomplet : ${draft.blockingIssues.join(" ")}` };
+  }
+
+  const result = await pushYpareoPlacement(draft, classId);
+  if (result.success) revalidatePath("/erreurs");
+  return result;
+}
+
 function buildApprentiPayload(draft: YpareoPlacementDraft, nir: string | null) {
   const section = (title: string) => draft.sections.find((s) => s.title === title);
   const val = (sectionTitle: string, label: string) =>

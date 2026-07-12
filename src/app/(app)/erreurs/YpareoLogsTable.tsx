@@ -1,8 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { ChevronDown, ChevronUp, Loader2, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { replayYpareoPlacement } from "@/app/(app)/ypareo/actions";
 
 export type YpareoLogRow = {
   id: string;
@@ -13,6 +16,7 @@ export type YpareoLogRow = {
   status: string;
   errorMessage: string | null;
   responseStatus: number | null;
+  retryable: boolean;
 };
 
 const STATUS_META: Record<string, { label: string; className: string }> = {
@@ -21,9 +25,40 @@ const STATUS_META: Record<string, { label: string; className: string }> = {
   error:   { label: "Erreur",    className: "bg-red-50 text-red-600" },
 };
 
+function ReplayButton({ logId }: { logId: string }) {
+  const router = useRouter();
+  const [isReplaying, startReplay] = useTransition();
+
+  function handleReplay(e: React.MouseEvent) {
+    e.stopPropagation();
+    startReplay(async () => {
+      const result = await replayYpareoPlacement(logId);
+      if (!result.success) {
+        toast.error(result.error ?? "Échec du rejeu");
+        return;
+      }
+      toast.success("Envoi Ypareo rejoué avec succès");
+      router.refresh();
+    });
+  }
+
+  return (
+    <button
+      onClick={handleReplay}
+      disabled={isReplaying}
+      className="inline-flex items-center gap-1 rounded-md border border-input bg-background px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-50"
+      title="Reconstruire le dossier depuis les fiches actuelles et relancer l'envoi"
+    >
+      {isReplaying ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
+      Rejouer
+    </button>
+  );
+}
+
 function LogRow({ log }: { log: YpareoLogRow }) {
   const [expanded, setExpanded] = useState(false);
   const meta = STATUS_META[log.status] ?? STATUS_META.pending;
+  const canReplay = log.status === "error" && log.retryable && log.operation === "placement";
 
   return (
     <>
@@ -57,6 +92,9 @@ function LogRow({ log }: { log: YpareoLogRow }) {
           </span>
         </td>
         <td className="px-4 py-3 text-xs text-muted-foreground">{log.responseStatus ?? "–"}</td>
+        <td className="px-4 py-3 whitespace-nowrap">
+          {canReplay && <ReplayButton logId={log.id} />}
+        </td>
         <td className="px-4 py-3 text-xs w-6">
           {log.errorMessage && (
             expanded ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
@@ -65,7 +103,7 @@ function LogRow({ log }: { log: YpareoLogRow }) {
       </tr>
       {expanded && log.errorMessage && (
         <tr>
-          <td colSpan={6} className="px-4 pb-3 pt-0">
+          <td colSpan={7} className="px-4 pb-3 pt-0">
             <pre className="text-xs bg-muted rounded-md p-3 whitespace-pre-wrap break-words text-destructive font-mono">
               {log.errorMessage}
             </pre>
@@ -111,6 +149,7 @@ export function YpareoLogsTable({ logs }: { logs: YpareoLogRow[] }) {
                 <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Opération</th>
                 <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Statut</th>
                 <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">HTTP</th>
+                <th className="px-4 py-2.5 text-left text-xs font-medium text-muted-foreground">Action</th>
                 <th className="px-4 py-2.5 w-6" />
               </tr>
             </thead>
