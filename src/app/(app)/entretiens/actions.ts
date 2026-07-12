@@ -369,6 +369,77 @@ export async function scheduleInterviewTask(input: {
   return { success: true };
 }
 
+/**
+ * Repli quand le recruteur passe un candidat en « Entretien » mais ferme la
+ * modale sans planifier (« Passer ») : crée une tâche « Entretien à planifier »
+ * assignée à l'utilisateur courant, pour que le candidat ne reste pas invisible
+ * (statut interview sans aucune tâche). Idempotent : ne crée rien s'il existe
+ * déjà une tâche d'entretien ouverte pour ce candidat.
+ */
+export async function createInterviewToPlanTask(
+  candidateId: string,
+): Promise<{ success: true } | ActionError> {
+  const user = await requireAuth();
+  const guard = await checkPreviewGuard();
+  if (guard) return guard;
+
+  const candidat = await db.query.candidates.findFirst({
+    where: and(eq(candidates.id, candidateId), isNull(candidates.deletedAt)),
+    columns: { id: true, firstName: true, lastName: true },
+  });
+  if (!candidat) return { success: false, error: "Candidat introuvable" };
+
+  const existing = await db
+    .select({ id: tasks.id })
+    .from(tasks)
+    .innerJoin(taskLinks, eq(taskLinks.taskId, tasks.id))
+    .where(
+      and(
+        eq(taskLinks.entityType, "candidate"),
+        eq(taskLinks.entityId, candidateId),
+        inArray(tasks.category, ["interview", "video_interview", "onsite_interview"]),
+        isNull(tasks.completedAt),
+        isNull(tasks.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (existing.length > 0) return { success: true };
+
+  const title = `Entretien à planifier — ${candidat.firstName} ${candidat.lastName}`;
+
+  await db.transaction(async (tx) => {
+    const [createdTask] = await tx
+      .insert(tasks)
+      .values({
+        title,
+        category: "interview",
+        dueAt: new Date(),
+        assignedTo: user.id,
+        createdBy: user.id,
+        source: "interview_scheduling",
+      })
+      .returning({ id: tasks.id });
+
+    await tx.insert(taskLinks).values({
+      taskId: createdTask.id,
+      entityType: "candidate",
+      entityId: candidateId,
+    });
+  });
+
+  await logActivityEvent({
+    candidateId,
+    actorId: user.id,
+    actionType: "interview_scheduled",
+    summary: "Entretien EDA à planifier (date non renseignée)",
+  });
+
+  revalidatePath("/taches");
+  revalidatePath("/dashboard");
+  revalidatePath(`/candidats/${candidateId}`);
+  return { success: true };
+}
+
 // ─── Cycle de vie d'un entretien ──────────────────────────────────────────────
 
 export async function startInterview(input: {

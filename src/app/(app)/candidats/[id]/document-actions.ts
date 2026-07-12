@@ -108,7 +108,7 @@ export async function getDocumentExtraction(documentId: string): Promise<Record<
     .where(and(eq(documents.id, documentId), isNull(candidates.deletedAt)))
     .limit(1);
   if (!row) return null;
-  return (row?.extractedData as Record<string, unknown> | null) ?? null;
+  return stripClientSensitive((row?.extractedData as Record<string, unknown> | null) ?? null);
 }
 
 // ─── Upload + extraction ──────────────────────────────────────────────────────
@@ -148,6 +148,21 @@ function objectValue(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
     : null;
+}
+
+/**
+ * Retire les données sensibles (NIR chiffré + IV) avant de renvoyer une
+ * extraction au client. Conforme à l'ADR-0005 : le NIR n'est jamais envoyé au
+ * client, seul son masque reste visible. Le déchiffrement se fait uniquement
+ * côté serveur (applyDocumentExtraction relit la donnée complète en base).
+ */
+function stripClientSensitive(
+  data: Record<string, unknown> | null,
+): Record<string, unknown> | null {
+  if (!data) return data;
+  const rest = { ...data };
+  delete rest[PROTECTED_EXTRACTION_KEY];
+  return rest;
 }
 
 function normalizedNir(value: unknown) {
@@ -325,7 +340,7 @@ export async function uploadCandidateDocument(
   };
 
   revalidatePath(`/candidats/${candidateId}`);
-  return { success: true, documentId, doc: finalDoc, extractedData };
+  return { success: true, documentId, doc: finalDoc, extractedData: stripClientSensitive(extractedData) };
 }
 
 // ─── Internal extraction ──────────────────────────────────────────────────────
@@ -575,7 +590,7 @@ export async function retryDocumentExtraction(
   if (extractedData === null) {
     return { success: false, error: "Extraction échouée" };
   }
-  return { success: true, extractedData };
+  return { success: true, extractedData: stripClientSensitive(extractedData) ?? undefined };
 }
 
 // ─── Delete ───────────────────────────────────────────────────────────────────

@@ -3,6 +3,8 @@
 import { db } from "@/db";
 import { candidates, companies, companyContacts } from "@/db/schema";
 import { eq, isNull, and } from "drizzle-orm";
+import { requireAuth } from "@/lib/auth";
+import { can, type AppRole } from "@/lib/permissions";
 import {
   createCandidatSchema,
   createEntrepriseSchema,
@@ -51,6 +53,11 @@ export async function createCandidat(
   input: CreateCandidatInput,
   force = false
 ): Promise<ActionResult<{ id: string; firstName: string; lastName: string }>> {
+  const actor = await requireAuth();
+  if (!can(actor.role as AppRole, "candidates:edit")) {
+    return { success: false, error: "Vous n'avez pas les droits pour créer un candidat" };
+  }
+
   const parsed = createCandidatSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: "Données invalides" };
 
@@ -91,7 +98,7 @@ export async function createCandidat(
 
   const [created] = await db
     .insert(candidates)
-    .values({ firstName, lastName, phone, email: email.toLowerCase(), cursusEnvisage })
+    .values({ firstName, lastName, phone, email: email.toLowerCase(), cursusEnvisage, createdBy: actor.id })
     .returning({ id: candidates.id, firstName: candidates.firstName, lastName: candidates.lastName });
 
   return { success: true, data: created };
@@ -103,6 +110,11 @@ export async function createEntreprise(
   input: CreateEntrepriseInput,
   registry?: RegistryData | null
 ): Promise<ActionResult<{ id: string; name: string }>> {
+  const actor = await requireAuth();
+  if (!can(actor.role as AppRole, "companies:edit")) {
+    return { success: false, error: "Vous n'avez pas les droits pour créer une entreprise" };
+  }
+
   const parsed = createEntrepriseSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: "Données invalides" };
 
@@ -125,6 +137,7 @@ export async function createEntreprise(
     .values({
       name,
       siret,
+      createdBy: actor.id,
       ...(registry && {
         siren: registry.siren || null,
         address: registry.address,
@@ -144,6 +157,7 @@ export async function createEntreprise(
     firstName: contactFirstName,
     lastName: contactLastName,
     phone: contactPhone,
+    createdBy: actor.id,
   });
 
   return { success: true, data: created };
