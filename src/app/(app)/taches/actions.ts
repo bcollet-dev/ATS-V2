@@ -4,8 +4,23 @@ import { db } from "@/db";
 import { tasks, taskLinks, notifications, activityEvents, candidates, companies, companyContacts } from "@/db/schema";
 import { eq, and, isNull, ilike, or } from "drizzle-orm";
 import { requireAuth } from "@/lib/auth";
+import { type AppRole } from "@/lib/permissions";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+
+// Peuvent gérer (terminer / éditer / supprimer) n'importe quelle tâche.
+const TASK_MANAGER_ROLES = new Set<AppRole>(["admin", "direction", "team_leader"]);
+
+function canManageTask(
+  task: { createdBy: string | null; assignedTo: string | null },
+  actor: { id: string; role: string },
+): boolean {
+  return (
+    task.createdBy === actor.id ||
+    task.assignedTo === actor.id ||
+    TASK_MANAGER_ROLES.has(actor.role as AppRole)
+  );
+}
 import {
   parseTaskCategory,
   taskLinkFromFormData,
@@ -220,6 +235,9 @@ export async function toggleGlobalTask(id: string) {
 
   const task = await db.query.tasks.findFirst({ where: eq(tasks.id, id) });
   if (!task) return;
+  if (!canManageTask(task, user)) {
+    throw new Error("Vous n'avez pas les droits sur cette tâche");
+  }
 
   const now = task.completedAt ? null : new Date();
   const links = await loadLinksForTask(id);
@@ -255,14 +273,22 @@ export async function updateGlobalTask(id: string, formData: FormData) {
 
   const { title, description, dueAt, assignedTo } = parsed.data;
   const category = parseTaskCategory(parsed.data.category);
+
+  const existing = await db.query.tasks.findFirst({ where: eq(tasks.id, id) });
+  if (!existing) return { error: "Tâche introuvable" };
+  if (!canManageTask(existing, user)) {
+    return { error: "Vous n'avez pas les droits sur cette tâche" };
+  }
+
   const links = await loadLinksForTask(id);
+  const newAssignee = assignedTo || null;
 
   await db.update(tasks).set({
     title,
     category,
     description: description || null,
     dueAt: new Date(dueAt),
-    assignedTo: assignedTo || null,
+    assignedTo: newAssignee,
     updatedAt: new Date(),
   }).where(eq(tasks.id, id));
 
@@ -273,12 +299,29 @@ export async function updateGlobalTask(id: string, formData: FormData) {
     summary: `Tache modifiee : ${title}`,
   });
 
+  // Notifier le nouvel assigné lors d'une réassignation (createGlobalTask notifie
+  // à la création, mais l'édition ne le faisait pas → réassignation silencieuse).
+  if (newAssignee && newAssignee !== existing.assignedTo && newAssignee !== user.id) {
+    await db.insert(notifications).values({
+      userId: newAssignee,
+      type: "task_assigned",
+      title: "Tâche assignée",
+      body: `${user.fullName} vous a assigné : ${title}`,
+      candidateId: firstLinkOfType(links, "candidate"),
+      companyId: firstLinkOfType(links, "company"),
+    });
+  }
+
   revalidateLinkedTaskSurfaces(links);
 }
 
 export async function deleteGlobalTask(id: string) {
   const user = await requireAuth();
   const task = await db.query.tasks.findFirst({ where: eq(tasks.id, id) });
+  if (!task) return;
+  if (!canManageTask(task, user)) {
+    throw new Error("Vous n'avez pas les droits sur cette tâche");
+  }
   const links = await loadLinksForTask(id);
 
   await db.update(tasks).set({ deletedAt: new Date(), updatedAt: new Date() }).where(eq(tasks.id, id));
