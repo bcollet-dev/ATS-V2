@@ -3,9 +3,9 @@
 import { requireAuth } from "@/lib/auth";
 import { can, type AppRole } from "@/lib/permissions";
 import { db } from "@/db";
-import { matchings, candidates, needs, companies, classes, cursus, needCursus, appSettings, documents, profiles, companyContacts, mailTemplates } from "@/db/schema";
+import { matchings, candidates, needs, companies, classes, cursus, needCursus, appSettings, documents, profiles, companyContacts, mailTemplates, activityEvents } from "@/db/schema";
 import { sendSlackNotification, buildFreBlocks, buildEntretienBlocks } from "@/lib/slack";
-import { eq, isNull, isNotNull, and, asc, notInArray, inArray } from "drizzle-orm";
+import { eq, isNull, isNotNull, and, asc, notInArray, inArray, gt } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { createStorageClient } from "@/lib/supabase/server";
 import { logActivityEvent } from "@/lib/activity";
@@ -979,8 +979,32 @@ export async function sendMatchingEmails(params: {
     cvDocumentIds: string[];
     candidateIds: string[];
   }[];
-}): Promise<{ results: { needId: string; success: boolean; error?: string }[] }> {
+}): Promise<{ results: { needId: string; success: boolean; error?: string }[]; notifyFailures?: number }> {
   const user = await requireAuth();
+
+  // ML2 — l'envoi de CV aux entreprises est réservé aux rôles habilités.
+  if (!can(user.role as AppRole, "matchings:editStatus")) {
+    return {
+      results: params.emails.map((e) => ({
+        needId: e.needId,
+        success: false,
+        error: "Vous n'avez pas les droits pour envoyer des CV aux entreprises.",
+      })),
+    };
+  }
+
+  // ML3 — borne la taille du lot pour éviter le dépassement du timeout serverless
+  // et les quotas Gmail ; au-delà, l'utilisateur envoie en plusieurs fois.
+  const MAX_BATCH = 50;
+  if (params.emails.length > MAX_BATCH) {
+    return {
+      results: params.emails.map((e) => ({
+        needId: e.needId,
+        success: false,
+        error: `Trop d'envois en une fois (max ${MAX_BATCH}). Envoyez en plusieurs lots.`,
+      })),
+    };
+  }
 
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
@@ -1008,6 +1032,29 @@ export async function sendMatchingEmails(params: {
   // ── Build variable context ────────────────────────────────────────────────
   const needIds = params.emails.map((e) => e.needId);
   const recipientEmails = [...new Set(params.emails.map((e) => e.recipientEmail))];
+
+  // ML1 — anti-double-envoi : on refuse de renvoyer un CV au même contact pour le
+  // même besoin s'il a déjà été envoyé il y a moins de 2 minutes (double-clic /
+  // retry). `sentKeys` sert aussi de dédoublonnage intra-lot (ML7).
+  const DOUBLE_SEND_WINDOW_MS = 2 * 60 * 1000;
+  const recentSends = needIds.length > 0
+    ? await db
+        .select({ needId: activityEvents.needId, metadata: activityEvents.metadata })
+        .from(activityEvents)
+        .where(
+          and(
+            eq(activityEvents.actionType, "cv_sent"),
+            inArray(activityEvents.needId, needIds),
+            gt(activityEvents.createdAt, new Date(Date.now() - DOUBLE_SEND_WINDOW_MS)),
+          ),
+        )
+    : [];
+  const sentKeys = new Set<string>();
+  for (const ev of recentSends) {
+    const to = (ev.metadata as { to?: string } | null)?.to;
+    if (ev.needId && to) sentKeys.add(`${ev.needId}|${to.trim().toLowerCase()}`);
+  }
+  const dedupKey = (needId: string, email: string) => `${needId}|${email.trim().toLowerCase()}`;
 
   const [needRows, contactRows] = await Promise.all([
     db
@@ -1105,6 +1152,17 @@ export async function sendMatchingEmails(params: {
     : null;
 
   for (const email of params.emails) {
+    const key = dedupKey(email.needId, email.recipientEmail);
+    if (sentKeys.has(key)) {
+      results.push({
+        needId: email.needId,
+        success: false,
+        error: "CV déjà envoyé à ce contact il y a moins de 2 minutes.",
+      });
+      continue;
+    }
+    sentKeys.add(key);
+
     const attachments = email.cvDocumentIds
       .map((id) => {
         const doc = docMap.get(id);
@@ -1154,6 +1212,14 @@ export async function sendMatchingEmails(params: {
         attachments,
       });
       results.push({ needId: email.needId, success: true });
+      // ML1/ML5 — trace l'envoi (sert au garde anti-double-envoi et à l'historique).
+      await logActivityEvent({
+        needId: email.needId,
+        actorId: user.id,
+        actionType: "cv_sent",
+        summary: `CV envoyé à ${email.recipientEmail}${needCtx?.title ? ` — ${needCtx.title}` : ""}`,
+        metadata: { to: email.recipientEmail, cc: email.cc ?? null, bcc: email.bcc ?? null },
+      });
     } catch (err) {
       results.push({
         needId: email.needId,
@@ -1164,6 +1230,7 @@ export async function sendMatchingEmails(params: {
   }
 
   // ── Candidate notifications ───────────────────────────────────────────────
+  let notifyFailures = 0;
   if (params.notifyCandidates) {
     const [defaultTpl] = await db
       .select({ id: mailTemplates.id, subject: mailTemplates.subject, body: mailTemplates.body })
@@ -1227,6 +1294,7 @@ export async function sendMatchingEmails(params: {
               text: stripHtml(notifHtml),
             });
           } catch (err) {
+            notifyFailures++;
             console.error(`[notif-candidat] Échec envoi à ${cand.email}:`, err);
           }
         }
@@ -1234,7 +1302,7 @@ export async function sendMatchingEmails(params: {
     }
   }
 
-  return { results };
+  return { results, notifyFailures };
 }
 
 export async function getCVPreviewUrl(

@@ -212,7 +212,7 @@ export function SendEmailModal({
     }
 
     startSending(async () => {
-      const { results } = await sendMatchingEmails({ notifyCandidates, emails });
+      const { results, notifyFailures } = await sendMatchingEmails({ notifyCandidates, emails });
       let successCount = 0;
       let failCount = 0;
       for (const r of results) {
@@ -235,6 +235,11 @@ export function SendEmailModal({
           firstError
             ? `${failCount} email${failCount > 1 ? "s" : ""} en échec : ${firstError}`
             : `${failCount} email${failCount > 1 ? "s" : ""} en échec`
+        );
+      }
+      if (notifyFailures && notifyFailures > 0) {
+        toast.warning(
+          `${notifyFailures} notification${notifyFailures > 1 ? "s" : ""} candidat en échec`
         );
       }
       if (failCount === 0) setTimeout(onClose, 800);
