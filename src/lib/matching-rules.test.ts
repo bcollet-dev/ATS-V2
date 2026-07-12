@@ -4,6 +4,7 @@ import {
   canNeedBeMatched,
   deriveCandidateStatusFromPropositions,
   deriveNeedStatusFromPropositions,
+  winnerDowngradeReleasesFreeze,
 } from "../app/(app)/matching/rules";
 
 describe("matching rules", () => {
@@ -41,5 +42,15 @@ describe("matching rules", () => {
     expect(deriveNeedStatusFromPropositions(["cv_sent", "interview"])).toBe("interview");
     expect(deriveNeedStatusFromPropositions(["interview", "waiting_fre"])).toBe("waiting_fre");
     expect(deriveNeedStatusFromPropositions(["waiting_fre", "placed"])).toBe("client");
+  });
+
+  it("releases the freeze only when a winner is downgraded below waiting_fre", () => {
+    expect(winnerDowngradeReleasesFreeze(true, "interview")).toBe(true);
+    expect(winnerDowngradeReleasesFreeze(true, "cv_sent")).toBe(true);
+    expect(winnerDowngradeReleasesFreeze(true, "not_retained")).toBe(true);
+    expect(winnerDowngradeReleasesFreeze(true, "waiting_fre")).toBe(false);
+    expect(winnerDowngradeReleasesFreeze(true, "placed")).toBe(false);
+    expect(winnerDowngradeReleasesFreeze(false, "interview")).toBe(false);
+    expect(winnerDowngradeReleasesFreeze(false, "not_retained")).toBe(false);
   });
 });

@@ -18,6 +18,7 @@ import {
   canNeedBeMatched,
   deriveCandidateStatusFromPropositions,
   deriveNeedStatusFromPropositions,
+  winnerDowngradeReleasesFreeze,
   MATCHING_ALLOWED_CANDIDATE_STATUSES,
   MATCHING_ALLOWED_NEED_STATUSES,
 } from "./rules";
@@ -440,6 +441,9 @@ export async function updateMatchingStatus(
   refusalReason?: string
 ): Promise<void> {
   const actor = await requireAuth();
+  if (!can(actor.role as AppRole, "matchings:editStatus")) {
+    throw new Error("Vous n'avez pas les droits pour modifier un statut de proposition");
+  }
   const [row] = await db
     .select({
       needId: matchings.needId,
@@ -447,24 +451,54 @@ export async function updateMatchingStatus(
       firstName: candidates.firstName,
       lastName: candidates.lastName,
       classId: matchings.classId,
+      isWinner: matchings.isWinner,
+      isFrozen: matchings.isFrozen,
     })
     .from(matchings)
     .innerJoin(candidates, eq(matchings.candidateId, candidates.id))
     .where(eq(matchings.id, id));
+  if (!row) return;
+
+  // Gel en écriture : un matching gelé par la sélection d'un gagnant ne bouge
+  // plus tant que le gagnant n'est pas rétrogradé (qui déclenche le dégel).
+  if (row.isFrozen) {
+    throw new Error("Matching gelé par la sélection d'un gagnant — rétrogradez d'abord le gagnant du besoin");
+  }
+
+  const releasesFreeze = winnerDowngradeReleasesFreeze(row.isWinner, status);
 
   await db
     .update(matchings)
     .set({
       propositionStatus: status as never,
       updatedAt: new Date(),
+      ...(releasesFreeze ? { isWinner: false } : {}),
       ...(refusalReason !== undefined ? { refusalReason } : {}),
     })
     .where(eq(matchings.id, id));
 
-  if (row) {
+  // FRE annulé : libérer les matchings gelés du besoin et resynchroniser
+  // leurs candidats (CONTEXT.md — le gel se débloque si le FRE est annulé)
+  let releasedCandidateIds: string[] = [];
+  if (releasesFreeze) {
+    const frozen = await db
+      .select({ candidateId: matchings.candidateId })
+      .from(matchings)
+      .where(and(eq(matchings.needId, row.needId), eq(matchings.isFrozen, true)));
+    if (frozen.length > 0) {
+      await db
+        .update(matchings)
+        .set({ isFrozen: false, updatedAt: new Date() })
+        .where(and(eq(matchings.needId, row.needId), eq(matchings.isFrozen, true)));
+      releasedCandidateIds = [...new Set(frozen.map((m) => m.candidateId as string))];
+    }
+  }
+
+  {
     await Promise.all([
       syncCandidateStatusFromMatchings(row.candidateId),
       syncNeedStatusFromMatchings(row.needId),
+      ...releasedCandidateIds.map(syncCandidateStatusFromMatchings),
     ]);
     const statusLabels: Record<string, string> = {
       cv_sent: "CV envoyé", interview: "Entretien prévu",
@@ -499,6 +533,9 @@ export async function updateMatchingStatus(
 
 export async function markMatchingWinner(matchingId: string): Promise<void> {
   const actor = await requireAuth();
+  if (!can(actor.role as AppRole, "matchings:editStatus")) {
+    throw new Error("Vous n'avez pas les droits pour sélectionner un gagnant");
+  }
 
   const [row] = await db
     .select({
@@ -519,7 +556,7 @@ export async function markMatchingWinner(matchingId: string): Promise<void> {
     .where(eq(matchings.id, matchingId));
 
   // Freeze all others on same need
-  await db
+  const frozenSiblings = await db
     .update(matchings)
     .set({ isFrozen: true, updatedAt: new Date() })
     .where(
@@ -527,11 +564,18 @@ export async function markMatchingWinner(matchingId: string): Promise<void> {
         eq(matchings.needId, row.needId),
         notInArray(matchings.id, [matchingId])
       )
-    );
+    )
+    .returning({ candidateId: matchings.candidateId });
+
+  // Resynchroniser aussi les candidats gelés : leurs matchings sortent de la
+  // dérivation, ils doivent retomber sur leur statut réel (repli Admissible)
+  const frozenCandidateIds = [...new Set(frozenSiblings.map((m) => m.candidateId as string))]
+    .filter((cid) => cid !== row.candidateId);
 
   await Promise.all([
     syncCandidateStatusFromMatchings(row.candidateId),
     syncNeedStatusFromMatchings(row.needId),
+    ...frozenCandidateIds.map(syncCandidateStatusFromMatchings),
   ]);
 
   await logActivityEvent({
@@ -547,16 +591,24 @@ export async function markMatchingWinner(matchingId: string): Promise<void> {
 
 export async function deleteMatching(id: string): Promise<void> {
   const actor = await requireAuth();
+  if (!can(actor.role as AppRole, "matchings:editStatus")) {
+    throw new Error("Vous n'avez pas les droits pour retirer une proposition");
+  }
   const [row] = await db
     .select({
       needId: matchings.needId,
       candidateId: matchings.candidateId,
       firstName: candidates.firstName,
       lastName: candidates.lastName,
+      isFrozen: matchings.isFrozen,
     })
     .from(matchings)
     .innerJoin(candidates, eq(matchings.candidateId, candidates.id))
     .where(eq(matchings.id, id));
+
+  if (row?.isFrozen) {
+    throw new Error("Matching gelé par la sélection d'un gagnant — rétrogradez d'abord le gagnant du besoin");
+  }
 
   await db.delete(matchings).where(eq(matchings.id, id));
 
@@ -580,7 +632,10 @@ export async function deleteMatching(id: string): Promise<void> {
 
 // Revalidate need-specific path
 export async function deleteAllMatchingsForNeed(needId: string): Promise<void> {
-  await requireAuth();
+  const actor = await requireAuth();
+  if (!can(actor.role as AppRole, "needs:edit")) {
+    throw new Error("Vous n'avez pas les droits pour retirer les propositions de ce besoin");
+  }
   const rows = await db
     .select({ candidateId: matchings.candidateId })
     .from(matchings)
@@ -597,7 +652,10 @@ export async function deleteAllMatchingsForNeed(needId: string): Promise<void> {
 }
 
 export async function deleteAllMatchingsForCandidate(candidateId: string): Promise<void> {
-  await requireAuth();
+  const actor = await requireAuth();
+  if (!can(actor.role as AppRole, "candidates:edit")) {
+    throw new Error("Vous n'avez pas les droits pour retirer les propositions de ce candidat");
+  }
   const rows = await db
     .select({ needId: matchings.needId })
     .from(matchings)
