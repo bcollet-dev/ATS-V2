@@ -28,6 +28,13 @@ export function normalizeNeedPipelineStatus(status: string): string {
   return status === "a_shooter" || status === "cv_envoye" ? "need_in_progress" : status;
 }
 
+// Un gagnant rétrogradé sous « Attente FRE » annule la sélection : les
+// matchings gelés du besoin doivent être libérés (CONTEXT.md — « se débloque
+// si le statut FRE est annulé »).
+export function winnerDowngradeReleasesFreeze(isWinner: boolean, newStatus: string): boolean {
+  return isWinner && newStatus !== "waiting_fre" && newStatus !== "placed";
+}
+
 const PROPOSITION_PRIORITY: Record<string, number> = {
   cv_sent: 1,
   interview: 2,
