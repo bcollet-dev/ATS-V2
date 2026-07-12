@@ -43,6 +43,7 @@ export default async function ErreursPage() {
             status: ypareoLogs.status,
             errorMessage: ypareoLogs.errorMessage,
             responseStatus: ypareoLogs.responseStatus,
+            retryable: ypareoLogs.retryable,
           })
           .from(ypareoLogs)
           .leftJoin(candidates, eq(ypareoLogs.candidateId, candidates.id))
@@ -69,6 +70,7 @@ export default async function ErreursPage() {
     status: r.status,
     errorMessage: r.errorMessage ?? null,
     responseStatus: r.responseStatus ?? null,
+    retryable: r.retryable,
   }));
 
   return (
