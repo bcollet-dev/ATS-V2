@@ -389,7 +389,12 @@ export function InterviewClient({
       const result = await completeInterview(interview.id, payload, decisionInput);
       if (!result.success) { toast.error(result.error); return; }
       setDecisionModalOpen(false);
-      if (result.aiSummaryError) {
+      if (result.statusNotApplied) {
+        toast.warning(
+          "Décision enregistrée, mais le statut du candidat n'a pas été modifié : il a déjà avancé dans le pipeline. Utilisez « Modifier » sur l'entretien pour l'appliquer explicitement si besoin.",
+          { duration: 8000 }
+        );
+      } else if (result.aiSummaryError) {
         toast.success("Entretien finalisé — résumé IA indisponible, rédigez-le manuellement");
       } else {
         toast.success("Entretien finalisé");

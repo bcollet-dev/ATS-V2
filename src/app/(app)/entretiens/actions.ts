@@ -29,6 +29,7 @@ import {
   validateTrameQuestions,
   computeAverageScore,
   decisionToCandidateStatus,
+  canAutoApplyDecision,
 } from "@/lib/interview-logic";
 import { updateCandidateStatus } from "@/app/(app)/candidats/actions";
 import {
@@ -511,7 +512,10 @@ export async function completeInterview(
   interviewId: string,
   payload: InterviewPayloadInput,
   decision?: PositioningDecisionInput
-): Promise<{ success: true; aiSummaryError?: string } | ActionError> {
+): Promise<
+  | { success: true; aiSummaryError?: string; statusNotApplied?: string }
+  | ActionError
+> {
   const auth = await requireConductor();
   if ("success" in auth) return auth;
 
@@ -524,8 +528,10 @@ export async function completeInterview(
       candidateId: interviews.candidateId,
       subcategory: interviews.subcategory,
       trameName: interviews.trameName,
+      candidateStatus: candidates.status,
     })
     .from(interviews)
+    .innerJoin(candidates, eq(candidates.id, interviews.candidateId))
     .where(and(eq(interviews.id, interviewId), eq(interviews.status, "draft")))
     .limit(1);
   if (!existing) return { success: false, error: "Entretien introuvable ou déjà finalisé" };
@@ -563,13 +569,21 @@ export async function completeInterview(
     .where(eq(interviews.id, interviewId));
 
   // Décision de positionnement → statut pipeline (gèle les matchings et
-  // resynchronise les besoins en cas de refus, via la mécanique existante)
+  // resynchronise les besoins en cas de refus, via la mécanique existante).
+  // Garde-fou : si le candidat a déjà dépassé la phase pré-matching pendant
+  // que le brouillon était ouvert, la décision est enregistrée sans écraser
+  // le pipeline — le changement de statut redevient une action explicite.
+  let statusNotApplied: string | undefined;
   if (interviewDecision) {
-    await updateCandidateStatus(
-      existing.candidateId,
-      decisionToCandidateStatus(interviewDecision),
-      interviewDecision === "admissible" ? undefined : (refusalReason ?? undefined)
-    );
+    if (canAutoApplyDecision(existing.candidateStatus)) {
+      await updateCandidateStatus(
+        existing.candidateId,
+        decisionToCandidateStatus(interviewDecision),
+        interviewDecision === "admissible" ? undefined : (refusalReason ?? undefined)
+      );
+    } else {
+      statusNotApplied = existing.candidateStatus;
+    }
   }
 
   const summaryResult = await generateAndStoreInterviewSummary(interviewId);
@@ -579,7 +593,7 @@ export async function completeInterview(
     actorId: auth.user.id,
     actionType: "interview_completed",
     summary: interviewDecision
-      ? `Entretien « ${existing.trameName} » finalisé — ${DECISION_LABELS[interviewDecision]}`
+      ? `Entretien « ${existing.trameName} » finalisé — ${DECISION_LABELS[interviewDecision]}${statusNotApplied ? " (statut non modifié, candidat déjà avancé)" : ""}`
       : `Entretien « ${existing.trameName} » finalisé`,
   });
 
@@ -588,7 +602,11 @@ export async function completeInterview(
   revalidatePath(`/candidats/${existing.candidateId}`);
   revalidatePath("/candidats");
 
-  return summaryResult.success ? { success: true } : { success: true, aiSummaryError: summaryResult.error };
+  return {
+    success: true,
+    ...(summaryResult.success ? {} : { aiSummaryError: summaryResult.error }),
+    ...(statusNotApplied ? { statusNotApplied } : {}),
+  };
 }
 
 // ─── Édition a posteriori ─────────────────────────────────────────────────────
@@ -703,7 +721,7 @@ export async function deleteInterview(
   if ("success" in auth) return auth;
 
   const [existing] = await db
-    .select({ id: interviews.id, status: interviews.status, candidateId: interviews.candidateId, trameName: interviews.trameName })
+    .select({ id: interviews.id, status: interviews.status, candidateId: interviews.candidateId, trameName: interviews.trameName, taskId: interviews.taskId })
     .from(interviews)
     .where(eq(interviews.id, interviewId))
     .limit(1);
@@ -714,6 +732,17 @@ export async function deleteInterview(
   }
 
   await db.delete(interviews).where(eq(interviews.id, interviewId));
+
+  // Abandon d'un brouillon issu d'une tâche planifiée : le rendez-vous
+  // redevient visible dans le widget Mes tâches (la tâche est rouverte).
+  if (existing.status === "draft" && existing.taskId) {
+    await db
+      .update(tasks)
+      .set({ completedAt: null, completedBy: null, updatedAt: new Date() })
+      .where(eq(tasks.id, existing.taskId));
+    revalidatePath("/taches");
+    revalidatePath("/dashboard");
+  }
 
   await logActivityEvent({
     candidateId: existing.candidateId,

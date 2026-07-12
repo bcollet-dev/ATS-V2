@@ -1,6 +1,7 @@
 "use server";
 
 import { requireAuth } from "@/lib/auth";
+import { can, type AppRole } from "@/lib/permissions";
 import { db } from "@/db";
 import { candidates, profiles, tasks, taskLinks, matchings, needs } from "@/db/schema";
 import { eq, isNull, and, asc, inArray, notInArray } from "drizzle-orm";
@@ -140,8 +141,23 @@ export async function updateCandidatOwner(id: string, ownerId: string | null) {
 
 const ARCHIVE_STATUSES = new Set(["temporary_refusal", "definitive_refusal"]);
 
+// Statuts pré-matching (dont refus) : réservés aux rôles candidats.
+// Les statuts pilotés par les matchings restent accessibles aux rôles
+// relations entreprises (matchings:editStatus).
+const PRE_MATCHING_STATUSES = new Set([
+  "to_call", "in_progress", "no_response", "interview", "pvpp",
+  "admissible", "temporary_refusal", "definitive_refusal",
+]);
+
 export async function updateCandidateStatus(id: string, status: string, lostReason?: string) {
-  await requireAuth();
+  const user = await requireAuth();
+  const role = user.role as AppRole;
+  const allowed = PRE_MATCHING_STATUSES.has(status)
+    ? can(role, "candidates:edit")
+    : can(role, "matchings:editStatus");
+  if (!allowed) {
+    throw new Error("Vous n'avez pas les droits pour modifier le statut de ce candidat");
+  }
   await db
     .update(candidates)
     .set({
