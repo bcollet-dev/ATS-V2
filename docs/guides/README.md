@@ -9,6 +9,7 @@ entraîne** (effets de bord, statuts, notifications).
 |-------|----------|
 | [01 — Candidats & documents](./01-candidats-documents.md) | Créer un candidat, importer des documents, extraction IA, pipeline amont, entretien |
 | [02 — Tâches & notifications](./02-taches-notifications.md) | Créer/assigner/suivre des tâches, notifications, digest quotidien |
+| [03 — Mailing & trames mail](./03-mailing.md) | Connexion Gmail, trames, signature, envoi depuis une fiche, envoi de CV aux entreprises |
 
 > Ces guides décrivent le comportement **après** les corrections de sécurité et
 > de robustesse. En cas de doute sur un droit ou un effet, référez-vous à la
