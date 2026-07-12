@@ -55,7 +55,8 @@ import type {
   YpareoPlacementDraft,
   YpareoPlacementSource,
 } from "@/lib/ypareo/placement-draft";
-import { and, asc, desc, eq, inArray, isNull, notInArray } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, notInArray } from "drizzle-orm";
+import { can, type AppRole } from "@/lib/permissions";
 import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { sendSlackNotification, buildPlacementBlocks } from "@/lib/slack";
@@ -1196,9 +1197,31 @@ export async function pushYpareoPlacement(
   selectedClassId: string | null,
 ): Promise<{ success: boolean; error?: string }> {
   const actor = await requireAuth();
+  if (!can(actor.role as AppRole, "matchings:editStatus")) {
+    return { success: false, error: "Vous n'avez pas les droits pour envoyer un placement à Ypareo." };
+  }
 
   if (!draft.candidateId || !draft.needId || !draft.companyId) {
     return { success: false, error: "Dossier incomplet — candidat, besoin ou entreprise manquant." };
+  }
+
+  // Verrou anti double-envoi : un placement du même candidat encore "pending"
+  // (moins de 5 min) signifie qu'un envoi est en cours — un double envoi
+  // créerait des personnes/entreprises en doublon dans Ypareo.
+  const [pendingLog] = await db
+    .select({ id: ypareoLogs.id })
+    .from(ypareoLogs)
+    .where(
+      and(
+        eq(ypareoLogs.candidateId, draft.candidateId),
+        eq(ypareoLogs.operation, "placement"),
+        eq(ypareoLogs.status, "pending"),
+        gte(ypareoLogs.createdAt, new Date(Date.now() - 5 * 60 * 1000)),
+      )
+    )
+    .limit(1);
+  if (pendingLog) {
+    return { success: false, error: "Un envoi Ypareo est déjà en cours pour ce candidat — patientez quelques instants." };
   }
 
   const missingFields = collectMissingFields(draft.sections);

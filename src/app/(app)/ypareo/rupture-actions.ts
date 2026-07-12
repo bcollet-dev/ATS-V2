@@ -1,9 +1,11 @@
 "use server";
 
 import { requireAuth } from "@/lib/auth";
+import { can, type AppRole } from "@/lib/permissions";
 import { db } from "@/db";
-import { candidates, matchings, needs, companies, appSettings } from "@/db/schema";
+import { candidates, matchings, needs, companies, appSettings, ypareoLogs } from "@/db/schema";
 import { eq, and, inArray, notInArray } from "drizzle-orm";
+import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import {
   postRuptureContrat,
@@ -12,8 +14,49 @@ import {
   MOTIFS_RUPTURE_CONTRAT,
   type MotifRuptureCode,
 } from "@/lib/ypareo/client";
+import { isRuptureAlreadyApplied } from "@/lib/ypareo/rupture-rules";
 import { syncNeedStatusFromMatchings } from "@/app/(app)/matching/actions";
 import { sendSlackNotification, buildRuptureBlocks, buildAbandonBlocks } from "@/lib/slack";
+
+// Journal des échanges Ypareo — une ligne par appel (rupture contrat, départ
+// inscription), corrélées entre elles comme pour le placement.
+async function logYpareoCall(input: {
+  correlationId: string;
+  candidateId: string;
+  operation: string;
+  endpoint: string;
+  requestPayload: Record<string, unknown>;
+  actorId: string;
+}): Promise<string> {
+  const [log] = await db
+    .insert(ypareoLogs)
+    .values({
+      correlationId: input.correlationId,
+      candidateId: input.candidateId,
+      operation: input.operation,
+      endpoint: input.endpoint,
+      method: "POST",
+      requestPayload: input.requestPayload,
+      status: "pending",
+      createdBy: input.actorId,
+    })
+    .returning({ id: ypareoLogs.id });
+  return log.id;
+}
+
+async function closeYpareoLog(
+  logId: string,
+  outcome: { ok: true; note?: string } | { ok: false; errorMessage: string }
+): Promise<void> {
+  await db
+    .update(ypareoLogs)
+    .set(
+      outcome.ok
+        ? { status: "success", responseStatus: 200, responsePayload: outcome.note ? { note: outcome.note } : {} }
+        : { status: "error", errorMessage: outcome.errorMessage, responsePayload: { message: outcome.errorMessage }, retryable: true }
+    )
+    .where(eq(ypareoLogs.id, logId));
+}
 
 export type TriggerRuptureInput = {
   matchingId: string;
@@ -27,7 +70,10 @@ export type TriggerRuptureInput = {
 type ActionResult = { success: true } | { success: false; error: string } | { success: "partial"; error: string };
 
 export async function triggerRupture(input: TriggerRuptureInput): Promise<ActionResult> {
-  await requireAuth();
+  const actor = await requireAuth();
+  if (!can(actor.role as AppRole, "matchings:editStatus")) {
+    return { success: false, error: "Vous n'avez pas les droits pour déclencher une rupture" };
+  }
 
   const [matching] = await db
     .select({
@@ -44,19 +90,34 @@ export async function triggerRupture(input: TriggerRuptureInput): Promise<Action
   if (!matching) return { success: false, error: "Matching introuvable" };
   if (!matching.ypareoContratId) return { success: false, error: "Aucun contrat Ypareo associé à ce matching" };
 
-  // Rupture contrat — un 400 signifie probablement "déjà appliquée" : on continue pour syncer la DB
+  const correlationId = randomUUID();
+
+  // Rupture contrat — seul un 400 indiquant explicitement une rupture déjà
+  // enregistrée côté Ypareo autorise à poursuivre la synchronisation ; tout
+  // autre échec remonte sans toucher aux statuts (sinon l'ATS enregistrerait
+  // une rupture qu'Ypareo a refusée).
+  const ruptureLogId = await logYpareoCall({
+    correlationId,
+    candidateId: matching.candidateId as string,
+    operation: "rupture_contrat",
+    endpoint: `/contrat-apprentissage/${matching.ypareoContratId}/rupture`,
+    requestPayload: { date: input.date, motif: input.motif, commentaire: input.commentaire ?? null },
+    actorId: actor.id,
+  });
   try {
     await postRuptureContrat(matching.ypareoContratId, {
       date: input.date,
       motif: input.motif,
       ...(input.commentaire ? { commentaire: input.commentaire } : {}),
     });
+    await closeYpareoLog(ruptureLogId, { ok: true });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "";
-    if (!msg.includes("400")) {
-      return { success: false, error: msg || "Erreur Ypareo lors de la rupture contrat" };
+    const msg = err instanceof Error ? err.message : "Erreur Ypareo lors de la rupture contrat";
+    if (!isRuptureAlreadyApplied(msg)) {
+      await closeYpareoLog(ruptureLogId, { ok: false, errorMessage: msg });
+      return { success: false, error: msg };
     }
-    // 400 = rupture déjà enregistrée côté Ypareo → on synchronise quand même la DB
+    await closeYpareoLog(ruptureLogId, { ok: true, note: `Rupture déjà enregistrée côté Ypareo — synchronisation locale (${msg})` });
   }
 
   // Départ inscription — si ça échoue on met quand même la DB à jour et on signale l'erreur partielle
@@ -67,13 +128,23 @@ export async function triggerRupture(input: TriggerRuptureInput): Promise<Action
     } else if (!input.motifDepartId) {
       departError = "Motif de départ requis";
     } else {
+      const departLogId = await logYpareoCall({
+        correlationId,
+        candidateId: matching.candidateId as string,
+        operation: "depart_inscription",
+        endpoint: `/inscription/${matching.ypareoInscriptionId}/creer-depart`,
+        requestPayload: { dateDepart: input.date, idMotifDepart: input.motifDepartId },
+        actorId: actor.id,
+      });
       try {
         await postCreerDepart(matching.ypareoInscriptionId, {
           dateDepart: input.date,
           idMotifDepart: input.motifDepartId,
         });
+        await closeYpareoLog(departLogId, { ok: true });
       } catch (err) {
         departError = err instanceof Error ? err.message : "Erreur Ypareo lors du départ inscription";
+        await closeYpareoLog(departLogId, { ok: false, errorMessage: departError });
       }
     }
   }
@@ -140,7 +211,10 @@ export async function triggerRupture(input: TriggerRuptureInput): Promise<Action
 }
 
 export async function triggerAbandon(matchingId: string, motifDepartId: string): Promise<ActionResult> {
-  await requireAuth();
+  const actor = await requireAuth();
+  if (!can(actor.role as AppRole, "matchings:editStatus")) {
+    return { success: false, error: "Vous n'avez pas les droits pour déclencher un abandon" };
+  }
 
   const [matching] = await db
     .select({
@@ -159,17 +233,40 @@ export async function triggerAbandon(matchingId: string, motifDepartId: string):
   if (!matching.ypareoInscriptionId) return { success: false, error: "Aucune inscription Ypareo associée" };
 
   const today = new Date().toISOString().slice(0, 10);
+  const correlationId = randomUUID();
 
+  const ruptureLogId = await logYpareoCall({
+    correlationId,
+    candidateId: matching.candidateId as string,
+    operation: "rupture_contrat",
+    endpoint: `/contrat-apprentissage/${matching.ypareoContratId}/rupture`,
+    requestPayload: { date: today, motif: 2, commentaire: "Abandon" },
+    actorId: actor.id,
+  });
   try {
     await postRuptureContrat(matching.ypareoContratId, { date: today, motif: 2, commentaire: "Abandon" });
+    await closeYpareoLog(ruptureLogId, { ok: true });
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Erreur Ypareo rupture contrat" };
+    const msg = err instanceof Error ? err.message : "Erreur Ypareo rupture contrat";
+    await closeYpareoLog(ruptureLogId, { ok: false, errorMessage: msg });
+    return { success: false, error: msg };
   }
 
+  const departLogId = await logYpareoCall({
+    correlationId,
+    candidateId: matching.candidateId as string,
+    operation: "depart_inscription",
+    endpoint: `/inscription/${matching.ypareoInscriptionId}/creer-depart`,
+    requestPayload: { dateDepart: today, idMotifDepart: motifDepartId },
+    actorId: actor.id,
+  });
   try {
     await postCreerDepart(matching.ypareoInscriptionId, { dateDepart: today, idMotifDepart: motifDepartId });
+    await closeYpareoLog(departLogId, { ok: true });
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Erreur Ypareo départ inscription" };
+    const msg = err instanceof Error ? err.message : "Erreur Ypareo départ inscription";
+    await closeYpareoLog(departLogId, { ok: false, errorMessage: msg });
+    return { success: false, error: msg };
   }
 
   const now = new Date();
