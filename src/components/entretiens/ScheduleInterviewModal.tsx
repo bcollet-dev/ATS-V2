@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { CalendarClock, Loader2, MapPin, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import {
   Modal, ModalBody, ModalClose, ModalContent, ModalFooter, ModalHeader, ModalTitle,
 } from "@/components/ui/modal";
 import { cn } from "@/lib/utils";
-import { scheduleInterviewTask } from "@/app/(app)/entretiens/actions";
+import { scheduleInterviewTask, createInterviewToPlanTask } from "@/app/(app)/entretiens/actions";
 
 const SELECT_CLASS = cn(
   "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs",
@@ -47,12 +47,16 @@ export function ScheduleInterviewModal({
   const [mode, setMode] = useState<"visio" | "presentiel">("visio");
   const [assignedTo, setAssignedTo] = useState(currentUserId);
   const [isSaving, startSave] = useTransition();
+  // Évite de recréer une tâche de repli quand la fermeture vient d'une action
+  // déjà traitée (planification réussie ou « Passer »).
+  const handledRef = useRef(false);
 
   useEffect(() => {
     if (open) {
       setDueAt(defaultDateTime());
       setMode("visio");
       setAssignedTo(currentUserId);
+      handledRef.current = false;
     }
   }, [open, currentUserId]);
 
@@ -73,13 +77,32 @@ export function ScheduleInterviewModal({
         toast.error(result.error);
         return;
       }
+      handledRef.current = true;
       toast.success("Entretien planifié — visible dans le widget Mes tâches");
       onOpenChange(false);
     });
   }
 
+  // « Passer » ou fermeture (X / Échap / backdrop) : pas de planification
+  // maintenant, mais on crée une tâche « à planifier » pour que le candidat ne
+  // reste pas invisible (statut Entretien sans aucune tâche).
+  function handleSkip() {
+    handledRef.current = true;
+    startSave(async () => {
+      await createInterviewToPlanTask(candidateId);
+      onOpenChange(false);
+    });
+  }
+
   return (
-    <Modal open={open} onOpenChange={(o) => { if (!isSaving) onOpenChange(o); }}>
+    <Modal
+      open={open}
+      onOpenChange={(o) => {
+        if (isSaving) return;
+        if (!o && !handledRef.current) { handleSkip(); return; }
+        onOpenChange(o);
+      }}
+    >
       <ModalContent className="max-w-md">
         <ModalHeader>
           <ModalTitle>Planifier l'entretien</ModalTitle>
@@ -144,7 +167,7 @@ export function ScheduleInterviewModal({
           </div>
         </ModalBody>
         <ModalFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
+          <Button type="button" variant="outline" onClick={handleSkip} disabled={isSaving}>
             Passer
           </Button>
           <Button type="button" onClick={handleConfirm} disabled={isSaving}>
