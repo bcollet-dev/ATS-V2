@@ -5,6 +5,28 @@ import { tasks, taskLinks, notifications, activityEvents, profiles } from "@/db/
 import { eq, and, isNull, asc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
+import { type AppRole } from "@/lib/permissions";
+
+// Peuvent gérer n'importe quelle tâche ; sinon seulement créateur ou assigné.
+const TASK_MANAGER_ROLES = new Set<AppRole>(["admin", "direction", "team_leader"]);
+
+async function loadTaskOwnership(taskId: string) {
+  return db.query.tasks.findFirst({
+    where: eq(tasks.id, taskId),
+    columns: { createdBy: true, assignedTo: true },
+  });
+}
+
+function canManageTask(
+  task: { createdBy: string | null; assignedTo: string | null },
+  actor: { id: string; role: string },
+): boolean {
+  return (
+    task.createdBy === actor.id ||
+    task.assignedTo === actor.id ||
+    TASK_MANAGER_ROLES.has(actor.role as AppRole)
+  );
+}
 import {
   loadTaskAttachments,
   loadTaskLinkInputs,
@@ -201,6 +223,12 @@ export async function updateTask(
   const user = await getCurrentUser();
   if (!user) return { success: false, error: "Non authentifie" };
 
+  const ownership = await loadTaskOwnership(taskId);
+  if (!ownership) return { success: false, error: "Tâche introuvable" };
+  if (!canManageTask(ownership, user)) {
+    return { success: false, error: "Vous n'avez pas les droits sur cette tâche" };
+  }
+
   const dueAt = new Date(input.dueAt + "T12:00:00Z");
   const links = await loadTaskLinkInputs(taskId);
 
@@ -258,6 +286,12 @@ export async function toggleTask(
   const user = await getCurrentUser();
   if (!user) return { success: false, error: "Non authentifie" };
 
+  const ownership = await loadTaskOwnership(taskId);
+  if (!ownership) return { success: false, error: "Tâche introuvable" };
+  if (!canManageTask(ownership, user)) {
+    return { success: false, error: "Vous n'avez pas les droits sur cette tâche" };
+  }
+
   const now = new Date();
   const links = await loadTaskLinkInputs(taskId);
 
@@ -290,6 +324,12 @@ export async function deleteTask(
 ): Promise<{ success: boolean; error?: string }> {
   const user = await getCurrentUser();
   if (!user) return { success: false, error: "Non authentifie" };
+
+  const ownership = await loadTaskOwnership(taskId);
+  if (!ownership) return { success: false, error: "Tâche introuvable" };
+  if (!canManageTask(ownership, user)) {
+    return { success: false, error: "Vous n'avez pas les droits sur cette tâche" };
+  }
 
   const links = await loadTaskLinkInputs(taskId);
 
