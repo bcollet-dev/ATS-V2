@@ -1,10 +1,14 @@
 "use client";
 
+import { useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import type { AppRole } from "@/lib/permissions";
 import { startPreview, startRolePreview } from "./preview-actions";
-import { Eye } from "lucide-react";
+import { setUserActive, updateUserRole } from "./actions";
+import { Eye, Power } from "lucide-react";
 
 const ROLE_LABELS: Record<AppRole, string> = {
   admin:                 "Admin",
@@ -43,6 +47,69 @@ const ROLE_PREVIEW_OPTIONS: { role: string; label: string }[] = [
   { role: "team_leader",           label: "Team Leader" },
   { role: "direction",             label: "Direction" },
 ];
+
+const ROLE_EDIT_OPTIONS: AppRole[] = [
+  "admissions",
+  "relations_entreprises",
+  "team_leader",
+  "direction",
+  "admin",
+];
+
+function UserAdminControls({ user }: { user: UserRow }) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+
+  function onRoleChange(role: string) {
+    if (role === user.role) return;
+    start(async () => {
+      const res = await updateUserRole(user.id, role);
+      if (!res.success) toast.error(res.error ?? "Échec du changement de rôle");
+      else toast.success("Rôle mis à jour");
+      router.refresh();
+    });
+  }
+
+  function onToggleActive() {
+    start(async () => {
+      const res = await setUserActive(user.id, !user.active);
+      if (!res.success) toast.error(res.error ?? "Action impossible");
+      else toast.success(user.active ? "Utilisateur désactivé" : "Utilisateur réactivé");
+      router.refresh();
+    });
+  }
+
+  return (
+    <div className="flex items-center gap-2 shrink-0">
+      <select
+        value={user.role}
+        disabled={pending}
+        onChange={(e) => onRoleChange(e.target.value)}
+        className="h-8 rounded-md border bg-background px-2 text-xs disabled:opacity-50"
+        title="Changer le rôle"
+      >
+        {ROLE_EDIT_OPTIONS.map((r) => (
+          <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+        ))}
+      </select>
+      <button
+        type="button"
+        onClick={onToggleActive}
+        disabled={pending}
+        title={user.active ? "Désactiver" : "Réactiver"}
+        className={cn(
+          "flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors disabled:opacity-50",
+          user.active
+            ? "text-muted-foreground hover:bg-muted hover:text-foreground"
+            : "text-emerald-600 hover:bg-emerald-50",
+        )}
+      >
+        <Power className="h-3.5 w-3.5" />
+        {user.active ? "Désactiver" : "Réactiver"}
+      </button>
+    </div>
+  );
+}
 
 export function UsersClient({
   users,
@@ -109,12 +176,16 @@ export function UsersClient({
               </p>
               <p className="text-xs text-muted-foreground truncate">{u.email}</p>
             </div>
-            <span className={cn(
-              "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium shrink-0",
-              ROLE_BADGE[role] ?? "bg-muted text-muted-foreground"
-            )}>
-              {ROLE_LABELS[role] ?? role}
-            </span>
+            {isAdmin && u.id !== currentUserId ? (
+              <UserAdminControls user={u} />
+            ) : (
+              <span className={cn(
+                "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium shrink-0",
+                ROLE_BADGE[role] ?? "bg-muted text-muted-foreground"
+              )}>
+                {ROLE_LABELS[role] ?? role}
+              </span>
+            )}
             <span className="text-xs text-muted-foreground shrink-0 w-20 text-right">
               {formatDate(u.createdAt)}
             </span>

@@ -12,6 +12,7 @@ const GUIDE_FILES = [
   "02-taches-notifications.md",
   "03-mailing.md",
   "04-besoins.md",
+  "05-utilisateurs-roles.md",
 ];
 
 export default async function GuidePage() {
