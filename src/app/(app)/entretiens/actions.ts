@@ -11,7 +11,7 @@ import {
   taskLinks,
   notifications,
 } from "@/db/schema";
-import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, notInArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireAuth, checkPreviewGuard, type UserProfile } from "@/lib/auth";
 import { can, type AppRole } from "@/lib/permissions";
@@ -440,6 +440,80 @@ export async function createInterviewToPlanTask(
   return { success: true };
 }
 
+// Rétablit une tâche d'entretien ouverte pour le candidat après la suppression
+// d'un entretien : rouvre la tâche liée si elle existe encore, sinon recrée une
+// tâche « à planifier » (idempotent). Garantit que le candidat reste actionnable
+// (« redevient une tâche ») et que l'entretien peut être repassé.
+async function reopenOrCreateInterviewTask(
+  candidateId: string,
+  taskId: string | null,
+  userId: string,
+): Promise<void> {
+  if (taskId) {
+    const reopened = await db
+      .update(tasks)
+      .set({ completedAt: null, completedBy: null, updatedAt: new Date() })
+      .where(and(eq(tasks.id, taskId), isNull(tasks.deletedAt)))
+      .returning({ id: tasks.id });
+    if (reopened.length > 0) {
+      revalidatePath("/taches");
+      revalidatePath("/dashboard");
+      return;
+    }
+  }
+
+  // Pas de tâche liée exploitable : recrée une tâche « à planifier » si le
+  // candidat n'en a pas déjà une ouverte.
+  const existing = await db
+    .select({ id: tasks.id })
+    .from(tasks)
+    .innerJoin(taskLinks, eq(taskLinks.taskId, tasks.id))
+    .where(
+      and(
+        eq(taskLinks.entityType, "candidate"),
+        eq(taskLinks.entityId, candidateId),
+        inArray(tasks.category, ["interview", "video_interview", "onsite_interview"]),
+        isNull(tasks.completedAt),
+        isNull(tasks.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (existing.length > 0) {
+    revalidatePath("/taches");
+    revalidatePath("/dashboard");
+    return;
+  }
+
+  const candidat = await db.query.candidates.findFirst({
+    where: eq(candidates.id, candidateId),
+    columns: { firstName: true, lastName: true },
+  });
+  const title = `Entretien à planifier — ${candidat?.firstName ?? ""} ${candidat?.lastName ?? ""}`.trim();
+
+  await db.transaction(async (tx) => {
+    const [createdTask] = await tx
+      .insert(tasks)
+      .values({
+        title,
+        category: "interview",
+        dueAt: new Date(),
+        assignedTo: userId,
+        createdBy: userId,
+        source: "interview_scheduling",
+      })
+      .returning({ id: tasks.id });
+
+    await tx.insert(taskLinks).values({
+      taskId: createdTask.id,
+      entityType: "candidate",
+      entityId: candidateId,
+    });
+  });
+
+  revalidatePath("/taches");
+  revalidatePath("/dashboard");
+}
+
 // ─── Cycle de vie d'un entretien ──────────────────────────────────────────────
 
 export async function startInterview(input: {
@@ -804,16 +878,11 @@ export async function deleteInterview(
 
   await db.delete(interviews).where(eq(interviews.id, interviewId));
 
-  // Abandon d'un brouillon issu d'une tâche planifiée : le rendez-vous
-  // redevient visible dans le widget Mes tâches (la tâche est rouverte).
-  if (existing.status === "draft" && existing.taskId) {
-    await db
-      .update(tasks)
-      .set({ completedAt: null, completedBy: null, updatedAt: new Date() })
-      .where(eq(tasks.id, existing.taskId));
-    revalidatePath("/taches");
-    revalidatePath("/dashboard");
-  }
+  // Suppression (brouillon abandonné ou entretien finalisé) : l'entretien
+  // redevient une tâche pour le candidat — la tâche liée est rouverte, ou une
+  // tâche « à planifier » est recréée — afin qu'il reste visible dans « Mes
+  // tâches » et puisse être repassé.
+  await reopenOrCreateInterviewTask(existing.candidateId, existing.taskId, auth.user.id);
 
   await logActivityEvent({
     candidateId: existing.candidateId,
@@ -865,6 +934,39 @@ export async function listInterviewCandidates(): Promise<InterviewCandidateRow[]
     ...c,
     interview: latestInterview.get(c.id) ?? null,
   }));
+}
+
+// Liste légère de tous les candidats actifs, pour le sélecteur « Nouvel
+// entretien ponctuel » de la page Entretiens (permet de lancer un entretien
+// pour un candidat quel que soit son statut dans le pipeline).
+export type PickableCandidateRow = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  cursusEnvisage: string | null;
+  status: string;
+};
+
+export async function listCandidatesForInterview(): Promise<PickableCandidateRow[]> {
+  const auth = await requireConductor();
+  if ("success" in auth) return [];
+
+  return db
+    .select({
+      id: candidates.id,
+      firstName: candidates.firstName,
+      lastName: candidates.lastName,
+      cursusEnvisage: candidates.cursusEnvisage,
+      status: candidates.status,
+    })
+    .from(candidates)
+    .where(
+      and(
+        isNull(candidates.deletedAt),
+        notInArray(candidates.status, ["temporary_refusal", "definitive_refusal"]),
+      ),
+    )
+    .orderBy(asc(candidates.firstName), asc(candidates.lastName));
 }
 
 export async function listCompletedInterviews(): Promise<CompletedInterviewRow[]> {

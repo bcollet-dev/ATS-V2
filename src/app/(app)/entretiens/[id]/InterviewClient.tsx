@@ -733,8 +733,8 @@ export function InterviewClient({
           <ModalBody>
             <p className="text-sm">
               {isDraft
-                ? "Les réponses saisies seront perdues."
-                : "L'entretien finalisé et son résumé seront définitivement supprimés. Le statut du candidat n'est pas modifié."}
+                ? "Les réponses saisies seront perdues. Une tâche d'entretien à planifier est recréée pour ce candidat."
+                : "L'entretien finalisé et son résumé seront définitivement supprimés. Le statut du candidat n'est pas modifié ; une tâche d'entretien à planifier est recréée pour pouvoir le repasser."}
             </p>
           </ModalBody>
           <ModalFooter>

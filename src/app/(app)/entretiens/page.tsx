@@ -1,20 +1,27 @@
 import { requireAuth } from "@/lib/auth";
 import { can, type AppRole } from "@/lib/permissions";
-import { listInterviewCandidates, listCompletedInterviews } from "./actions";
+import {
+  listInterviewCandidates,
+  listCompletedInterviews,
+  listCandidatesForInterview,
+} from "./actions";
 import { EntretiensClient } from "./EntretiensClient";
 
 export default async function EntretiensPage() {
   const user = await requireAuth();
-  const [interviewCandidates, completedInterviews] = await Promise.all([
+  const canConduct = can(user.role as AppRole, "interviews:conduct");
+  const [interviewCandidates, completedInterviews, allCandidates] = await Promise.all([
     listInterviewCandidates(),
     listCompletedInterviews(),
+    canConduct ? listCandidatesForInterview() : Promise.resolve([]),
   ]);
 
   return (
     <EntretiensClient
       initialCandidates={interviewCandidates}
       initialCompleted={completedInterviews}
-      canConduct={can(user.role as AppRole, "interviews:conduct")}
+      allCandidates={allCandidates}
+      canConduct={canConduct}
       canManageTrames={can(user.role as AppRole, "interviewTrames:manage")}
     />
   );
