@@ -3,7 +3,7 @@
 import { db } from "@/db";
 import { tasks, taskLinks, notifications, activityEvents, candidates, companies, companyContacts } from "@/db/schema";
 import { eq, and, isNull, ilike, or } from "drizzle-orm";
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, requireMutator } from "@/lib/auth";
 import { type AppRole } from "@/lib/permissions";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -166,7 +166,7 @@ function revalidateLinkedTaskSurfaces(links: TaskLinkInput[]) {
 }
 
 export async function createGlobalTask(formData: FormData) {
-  const user = await requireAuth();
+  const user = await requireMutator();
 
   const parsed = taskSchema.safeParse({
     title: formData.get("title"),
@@ -231,7 +231,7 @@ export async function createGlobalTask(formData: FormData) {
 }
 
 export async function toggleGlobalTask(id: string) {
-  const user = await requireAuth();
+  const user = await requireMutator();
 
   const task = await db.query.tasks.findFirst({ where: eq(tasks.id, id) });
   if (!task) return;
@@ -259,7 +259,7 @@ export async function toggleGlobalTask(id: string) {
 }
 
 export async function updateGlobalTask(id: string, formData: FormData) {
-  const user = await requireAuth();
+  const user = await requireMutator();
 
   const parsed = taskSchema.safeParse({
     title: formData.get("title"),
@@ -316,7 +316,7 @@ export async function updateGlobalTask(id: string, formData: FormData) {
 }
 
 export async function deleteGlobalTask(id: string) {
-  const user = await requireAuth();
+  const user = await requireMutator();
   const task = await db.query.tasks.findFirst({ where: eq(tasks.id, id) });
   if (!task) return;
   if (!canManageTask(task, user)) {

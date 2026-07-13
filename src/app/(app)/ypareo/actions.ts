@@ -13,7 +13,7 @@ import {
   needs,
   ypareoLogs,
 } from "@/db/schema";
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, requireMutator } from "@/lib/auth";
 import { resolveFrenchBirthDepartment } from "@/lib/birth-department";
 import { decryptNir } from "@/lib/nir";
 import {
@@ -1196,7 +1196,7 @@ export async function pushYpareoPlacement(
   draft: YpareoPlacementDraft,
   selectedClassId: string | null,
 ): Promise<{ success: boolean; error?: string }> {
-  const actor = await requireAuth();
+  const actor = await requireMutator();
   if (!can(actor.role as AppRole, "matchings:editStatus")) {
     return { success: false, error: "Vous n'avez pas les droits pour envoyer un placement à Ypareo." };
   }
@@ -1548,7 +1548,7 @@ export async function pushYpareoPlacement(
 export async function replayYpareoPlacement(
   logId: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const actor = await requireAuth();
+  const actor = await requireMutator();
   if (!can(actor.role as AppRole, "matchings:editStatus")) {
     return { success: false, error: "Vous n'avez pas les droits pour rejouer un envoi Ypareo." };
   }

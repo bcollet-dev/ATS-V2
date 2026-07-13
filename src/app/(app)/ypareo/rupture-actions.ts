@@ -1,6 +1,6 @@
 "use server";
 
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, requireMutator } from "@/lib/auth";
 import { can, type AppRole } from "@/lib/permissions";
 import { db } from "@/db";
 import { candidates, matchings, needs, companies, appSettings, ypareoLogs } from "@/db/schema";
@@ -70,7 +70,7 @@ export type TriggerRuptureInput = {
 type ActionResult = { success: true } | { success: false; error: string } | { success: "partial"; error: string };
 
 export async function triggerRupture(input: TriggerRuptureInput): Promise<ActionResult> {
-  const actor = await requireAuth();
+  const actor = await requireMutator();
   if (!can(actor.role as AppRole, "matchings:editStatus")) {
     return { success: false, error: "Vous n'avez pas les droits pour déclencher une rupture" };
   }
@@ -211,7 +211,7 @@ export async function triggerRupture(input: TriggerRuptureInput): Promise<Action
 }
 
 export async function triggerAbandon(matchingId: string, motifDepartId: string): Promise<ActionResult> {
-  const actor = await requireAuth();
+  const actor = await requireMutator();
   if (!can(actor.role as AppRole, "matchings:editStatus")) {
     return { success: false, error: "Vous n'avez pas les droits pour déclencher un abandon" };
   }

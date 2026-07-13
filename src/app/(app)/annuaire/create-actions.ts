@@ -3,7 +3,7 @@
 import { db } from "@/db";
 import { candidates, companies, companyContacts } from "@/db/schema";
 import { eq, isNull, and } from "drizzle-orm";
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, checkPreviewGuard } from "@/lib/auth";
 import { can, type AppRole } from "@/lib/permissions";
 import {
   createCandidatSchema,
@@ -54,6 +54,8 @@ export async function createCandidat(
   force = false
 ): Promise<ActionResult<{ id: string; firstName: string; lastName: string }>> {
   const actor = await requireAuth();
+  const previewGuard = await checkPreviewGuard();
+  if (previewGuard) return previewGuard;
   if (!can(actor.role as AppRole, "candidates:edit")) {
     return { success: false, error: "Vous n'avez pas les droits pour créer un candidat" };
   }
@@ -111,6 +113,8 @@ export async function createEntreprise(
   registry?: RegistryData | null
 ): Promise<ActionResult<{ id: string; name: string }>> {
   const actor = await requireAuth();
+  const previewGuard = await checkPreviewGuard();
+  if (previewGuard) return previewGuard;
   if (!can(actor.role as AppRole, "companies:edit")) {
     return { success: false, error: "Vous n'avez pas les droits pour créer une entreprise" };
   }

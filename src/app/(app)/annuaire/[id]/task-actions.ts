@@ -1,6 +1,6 @@
 "use server";
 
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, checkPreviewGuard } from "@/lib/auth";
 import { db } from "@/db";
 import { tasks, taskLinks, activityEvents, notifications } from "@/db/schema";
 import { eq, and, isNull, asc } from "drizzle-orm";
@@ -91,6 +91,8 @@ export async function createCompanyTask(
   input: TaskInput
 ): Promise<{ success: boolean; data?: CompanyTaskRow; error?: string }> {
   const actor = await requireAuth();
+  const previewGuard = await checkPreviewGuard();
+  if (previewGuard) return previewGuard;
   const dueAt = new Date(input.dueAt + "T12:00:00Z");
   const link: TaskLinkInput = { entityType: "company", entityId: companyId };
 
@@ -160,6 +162,8 @@ export async function updateCompanyTask(
   input: TaskInput
 ): Promise<{ success: boolean; data?: CompanyTaskRow; error?: string }> {
   const actor = await requireAuth();
+  const previewGuard = await checkPreviewGuard();
+  if (previewGuard) return previewGuard;
   const dueAt = new Date(input.dueAt + "T12:00:00Z");
   const links = await loadTaskLinkInputs(taskId);
 
@@ -207,6 +211,8 @@ export async function toggleCompanyTask(
   currentlyDone: boolean
 ): Promise<{ success: boolean; error?: string }> {
   const actor = await requireAuth();
+  const previewGuard = await checkPreviewGuard();
+  if (previewGuard) return previewGuard;
   const now = new Date();
   const links = await loadTaskLinkInputs(taskId);
 
@@ -237,6 +243,8 @@ export async function deleteCompanyTask(
   taskTitle: string
 ): Promise<{ success: boolean; error?: string }> {
   const actor = await requireAuth();
+  const previewGuard = await checkPreviewGuard();
+  if (previewGuard) return previewGuard;
   const links = await loadTaskLinkInputs(taskId);
 
   await db

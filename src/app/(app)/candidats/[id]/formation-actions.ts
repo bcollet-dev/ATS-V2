@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { candidateFormations, activityEvents } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, checkPreviewGuard } from "@/lib/auth";
 import { can, type AppRole } from "@/lib/permissions";
 
 export type FormationInput = {
@@ -33,6 +33,8 @@ export async function addFormation(
 ): Promise<{ success: boolean; data?: FormationRow; error?: string }> {
   const user = await getCurrentUser();
   if (!user) return { success: false, error: "Non authentifié" };
+  const guard = await checkPreviewGuard();
+  if (guard) return guard;
   if (!can(user.role as AppRole, "candidates:edit")) return { success: false, error: "Non autorisé" };
 
   const [row] = await db
@@ -73,6 +75,8 @@ export async function updateFormation(
 ): Promise<{ success: boolean; data?: FormationRow; error?: string }> {
   const user = await getCurrentUser();
   if (!user) return { success: false, error: "Non authentifié" };
+  const guard = await checkPreviewGuard();
+  if (guard) return guard;
   if (!can(user.role as AppRole, "candidates:edit")) return { success: false, error: "Non autorisé" };
 
   const [row] = await db
@@ -105,6 +109,8 @@ export async function deleteFormation(
 ): Promise<{ success: boolean; error?: string }> {
   const user = await getCurrentUser();
   if (!user) return { success: false, error: "Non authentifié" };
+  const guard = await checkPreviewGuard();
+  if (guard) return guard;
   if (!can(user.role as AppRole, "candidates:edit")) return { success: false, error: "Non autorisé" };
 
   await db.delete(candidateFormations).where(eq(candidateFormations.id, id));
