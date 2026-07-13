@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
   typedRoutes: true,
   serverExternalPackages: ["pdf-parse", "pdf-lib"],
   outputFileTracingIncludes: {
-    "**": ["./public/templates/**"],
+    "**": ["./public/templates/**", "./docs/guides/**"],
   },
   images: {
     remotePatterns: [

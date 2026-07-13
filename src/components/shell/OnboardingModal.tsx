@@ -8,6 +8,8 @@ import {
   UserCheck, ClipboardList, Star, Sparkles, Search,
   PenLine, Phone, Calendar, AlertCircle, Plus,
 } from "lucide-react";
+import Link from "next/link";
+import type { Route } from "next";
 import { Button } from "@/components/ui/button";
 import { markOnboardingComplete } from "@/app/(app)/onboarding/onboarding-actions";
 
@@ -198,6 +200,18 @@ export function OnboardingModal({
               </div>
             </div>
           ))}
+        </div>
+
+        {/* Lien vers les guides détaillés par workflow */}
+        <div className="px-6 pb-1">
+          <Link
+            href={"/guide" as Route}
+            onClick={handleClose}
+            className="flex items-center justify-center gap-1.5 rounded-lg border py-2 text-xs font-medium text-muted-foreground hover:bg-muted transition-colors"
+          >
+            <BookOpen className="h-3.5 w-3.5" />
+            Voir les guides détaillés par workflow
+          </Link>
         </div>
 
         {/* Footer navigation */}
