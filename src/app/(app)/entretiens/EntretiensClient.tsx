@@ -7,15 +7,112 @@ import {
   Eye,
   MapPin,
   Play,
+  Plus,
+  Search,
   Settings2,
   Sparkles,
 } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Modal, ModalBody, ModalContent, ModalHeader, ModalTitle,
+} from "@/components/ui/modal";
 import { cn } from "@/lib/utils";
 import { DECISION_LABELS, isPositioningSubcategory } from "@/lib/interview-grid";
 import { StartInterviewModal } from "@/components/entretiens/StartInterviewModal";
-import type { InterviewCandidateRow, CompletedInterviewRow } from "./actions";
+import type {
+  InterviewCandidateRow,
+  CompletedInterviewRow,
+  PickableCandidateRow,
+} from "./actions";
+
+const CANDIDATE_STATUS_LABELS: Record<string, string> = {
+  to_call: "À appeler",
+  in_progress: "En cours",
+  no_response: "NRP",
+  interview: "Entretien EDA",
+  pvpp: "PVPP",
+  admissible: "Admissible",
+  company_interview: "Entretien entreprise",
+  waiting_fre: "Attente FRE",
+  placed: "Placé",
+  temporary_refusal: "Refus temporaire",
+  definitive_refusal: "Refus définitif",
+  rupture: "Rupture",
+};
+
+// Sélecteur de candidat pour lancer un entretien ponctuel, quel que soit le
+// statut du candidat dans le pipeline.
+function PickCandidateModal({
+  open,
+  onOpenChange,
+  candidates,
+  onPick,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  candidates: PickableCandidateRow[];
+  onPick: (candidate: PickableCandidateRow) => void;
+}) {
+  const [search, setSearch] = useState("");
+  const q = search.trim().toLowerCase();
+  const results = q
+    ? candidates
+        .filter((c) =>
+          `${c.firstName} ${c.lastName} ${c.cursusEnvisage ?? ""}`.toLowerCase().includes(q)
+        )
+        .slice(0, 20)
+    : [];
+
+  return (
+    <Modal open={open} onOpenChange={(o) => { if (!o) setSearch(""); onOpenChange(o); }}>
+      <ModalContent className="max-w-md">
+        <ModalHeader><ModalTitle>Nouvel entretien</ModalTitle></ModalHeader>
+        <ModalBody className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Recherchez le candidat à faire passer — quel que soit son statut dans le pipeline.
+          </p>
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="search"
+              autoFocus
+              placeholder="Rechercher un candidat…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full rounded-md border border-input bg-background py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+            />
+          </div>
+          {q && (
+            <div className="max-h-72 divide-y overflow-y-auto rounded-md border">
+              {results.length === 0 ? (
+                <p className="px-4 py-6 text-center text-sm text-muted-foreground">Aucun candidat</p>
+              ) : (
+                results.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => { setSearch(""); onPick(c); }}
+                    className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-accent"
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="text-sm font-medium">{c.firstName} {c.lastName}</span>
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {c.cursusEnvisage ?? "Cursus non renseigné"}
+                      </span>
+                    </span>
+                    <Badge className="shrink-0 border-0 bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                      {CANDIDATE_STATUS_LABELS[c.status] ?? c.status}
+                    </Badge>
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+        </ModalBody>
+      </ModalContent>
+    </Modal>
+  );
+}
 
 const DECISION_BADGE: Record<string, string> = {
   admissible: "bg-emerald-100 text-emerald-700",
@@ -35,16 +132,19 @@ function formatDate(iso: string | null): string {
 export function EntretiensClient({
   initialCandidates,
   initialCompleted,
+  allCandidates,
   canConduct,
   canManageTrames,
 }: {
   initialCandidates: InterviewCandidateRow[];
   initialCompleted: CompletedInterviewRow[];
+  allCandidates: PickableCandidateRow[];
   canConduct: boolean;
   canManageTrames: boolean;
 }) {
   const [search, setSearch] = useState("");
   const [startTarget, setStartTarget] = useState<{ id: string; name: string } | null>(null);
+  const [pickOpen, setPickOpen] = useState(false);
 
   const q = search.trim().toLowerCase();
   const filteredCandidates = q
@@ -69,6 +169,18 @@ export function EntretiensClient({
         />
       )}
 
+      {canConduct && (
+        <PickCandidateModal
+          open={pickOpen}
+          onOpenChange={setPickOpen}
+          candidates={allCandidates}
+          onPick={(c) => {
+            setPickOpen(false);
+            setStartTarget({ id: c.id, name: `${c.firstName} ${c.lastName}` });
+          }}
+        />
+      )}
+
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold">Entretiens</h1>
@@ -87,6 +199,12 @@ export function EntretiensClient({
               "focus:outline-none focus:ring-1 focus:ring-ring"
             )}
           />
+          {canConduct && (
+            <Button className="shrink-0 gap-1.5" onClick={() => setPickOpen(true)}>
+              <Plus className="h-4 w-4" />
+              Nouvel entretien
+            </Button>
+          )}
           {canManageTrames && (
             <Link
               href="/trames/entretien"
