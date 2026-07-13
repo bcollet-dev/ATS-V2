@@ -37,6 +37,9 @@ type CreateNeedResult =
 
 export async function createNeed(input: CreateNeedInput): Promise<CreateNeedResult> {
   const actor = await requireAuth();
+  if (!can(actor.role as AppRole, "needs:edit")) {
+    return { success: false, error: "Vous n'avez pas les droits pour créer un besoin" };
+  }
   const parsed = createNeedSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: parsed.error.errors[0].message };
 
@@ -51,6 +54,7 @@ export async function createNeed(input: CreateNeedInput): Promise<CreateNeedResu
       city: city?.trim() || null,
       positionsCount,
       ownerId: ownerId || null,
+      createdBy: actor.id,
     })
     .returning({ id: needs.id, title: needs.title });
 
@@ -88,7 +92,11 @@ export async function createNeed(input: CreateNeedInput): Promise<CreateNeedResu
         companyId,
       });
     }
-  } catch { /* task creation failure is non-fatal */ }
+  } catch (err) {
+    // Non bloquant pour la création du besoin, mais on trace pour ne pas perdre
+    // silencieusement l'échec de la tâche premier-contact.
+    console.error("createNeed: échec de la tâche premier-contact", err);
+  }
 
   revalidatePath("/besoins");
   return { success: true, data: created };
@@ -239,9 +247,40 @@ export async function loadPipelineNeeds(): Promise<NeedRow[]> {
   });
 }
 
-export async function updateNeedStatus(id: string, status: string, lostReason?: string) {
+export async function updateNeedStatus(
+  id: string,
+  status: string,
+  lostReason?: string,
+): Promise<{ success: boolean; error?: string }> {
   const actor = await requireAuth();
-  if (!can(actor.role as AppRole, "needs:edit")) return;
+  if (!can(actor.role as AppRole, "needs:edit")) {
+    return { success: false, error: "Non autorisé" };
+  }
+
+  // B1 — un besoin avec un candidat engagé (placé / en rupture / gelé) n'est pas
+  // « perdu » : l'archiver contournerait le gel et dé-placerait un apprenti
+  // contractualisé. On bloque et on renvoie vers le flux rupture.
+  if (status === "lost") {
+    const engaged = await db
+      .select({ propositionStatus: matchings.propositionStatus, isFrozen: matchings.isFrozen })
+      .from(matchings)
+      .where(
+        and(
+          eq(matchings.needId, id),
+          notInArray(matchings.propositionStatus, ["not_retained"]),
+        ),
+      );
+    const hasEngaged = engaged.some(
+      (m) => m.isFrozen || m.propositionStatus === "placed" || m.propositionStatus === "rupture",
+    );
+    if (hasEngaged) {
+      return {
+        success: false,
+        error: "Un candidat est placé (ou en rupture) sur ce besoin. Gérez la rupture avant d'archiver.",
+      };
+    }
+  }
+
   await db
     .update(needs)
     .set({
@@ -252,17 +291,19 @@ export async function updateNeedStatus(id: string, status: string, lostReason?: 
     .where(eq(needs.id, id));
 
   if (status === "lost") {
+    // Cascade : ne retire QUE les matchings actifs non engagés (jamais un gelé /
+    // placé / rupture — bloqués plus haut, exclus ici par sécurité).
     const activeMatchings = await db
       .select({ id: matchings.id, candidateId: matchings.candidateId })
       .from(matchings)
       .where(
         and(
           eq(matchings.needId, id),
-          notInArray(matchings.propositionStatus, ["not_retained"])
-        )
+          eq(matchings.isFrozen, false),
+          notInArray(matchings.propositionStatus, ["not_retained", "placed", "rupture"]),
+        ),
       );
 
-    // Cascade: mark all active matchings as not_retained
     if (activeMatchings.length > 0) {
       await db
         .update(matchings)
@@ -276,6 +317,7 @@ export async function updateNeedStatus(id: string, status: string, lostReason?: 
   }
 
   revalidatePath("/besoins");
+  return { success: true };
 }
 
 export async function permanentlyDeleteNeed(id: string): Promise<{ success: boolean; error?: string }> {

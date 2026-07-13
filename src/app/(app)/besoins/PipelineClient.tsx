@@ -567,6 +567,13 @@ export function PipelineClient({
     }
     if (status === "lost") {
       const need = needs.find((n) => n.id === id);
+      const engaged = need?.needCandidates.some(
+        (c) => c.isFrozen || c.propositionStatus === "placed" || c.propositionStatus === "rupture",
+      );
+      if (engaged) {
+        toast.error("Un candidat est placé sur ce besoin. Gérez la rupture avant d'archiver.");
+        return;
+      }
       setPending({ id, status, activeMatchingsCount: need?.activeMatchingsCount ?? 0 });
       return;
     }
@@ -633,7 +640,11 @@ export function PipelineClient({
     setPending(null);
     startTransition(async () => {
       setOptimistic({ id, status });
-      await updateNeedStatus(id, status, reason);
+      const result = await updateNeedStatus(id, status, reason);
+      if (!result.success) {
+        toast.error(result.error ?? "Action impossible");
+        router.refresh();
+      }
     });
   }
 
@@ -643,7 +654,12 @@ export function PipelineClient({
     setPending(null);
     startTransition(async () => {
       setOptimistic({ id, status: "lost" });
-      await updateNeedStatus(id, "lost", "Suppression définitive");
+      const archiveResult = await updateNeedStatus(id, "lost", "Suppression définitive");
+      if (!archiveResult.success) {
+        toast.error(archiveResult.error ?? "Archivage impossible");
+        router.refresh();
+        return;
+      }
       const result = await permanentlyDeleteNeed(id);
       if (!result.success) {
         toast.error(result.error ?? "Suppression définitive impossible");
