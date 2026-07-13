@@ -35,6 +35,11 @@ export function RgpdClient({
       toast.success(
         `Purge terminée — ${result.purgedCandidates} candidat(s), ${result.purgedCompanies} entreprise(s) supprimé(s)`
       );
+      if (result.failed > 0) {
+        toast.warning(
+          `${result.failed} élément(s) n'ont pas pu être purgés (voir les logs) — réessai au prochain passage.`
+        );
+      }
       setCounts({ candidatesDue: 0, companiesDue: 0 });
     });
   }
