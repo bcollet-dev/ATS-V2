@@ -12,6 +12,7 @@ entraîne** (effets de bord, statuts, notifications).
 | [03 — Mailing & trames mail](./03-mailing.md) | Connexion Gmail, trames, signature, envoi depuis une fiche, envoi de CV aux entreprises |
 | [04 — Besoins](./04-besoins.md) | Créer un besoin, cursus, pipeline, archivage (avec protection du gel), suppression |
 | [05 — Utilisateurs, invitations & rôles](./05-utilisateurs-roles.md) | Inviter, rôles, activer/désactiver/réactiver, prévisualisation (admin) |
+| [06 — RGPD : rétention & purge](./06-rgpd.md) | Durées de rétention, purge automatique/manuelle, garanties d'effacement |
 
 > Ces guides décrivent le comportement **après** les corrections de sécurité et
 > de robustesse. En cas de doute sur un droit ou un effet, référez-vous à la
