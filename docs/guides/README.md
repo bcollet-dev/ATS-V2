@@ -11,6 +11,7 @@ entraîne** (effets de bord, statuts, notifications).
 | [02 — Tâches & notifications](./02-taches-notifications.md) | Créer/assigner/suivre des tâches, notifications, digest quotidien |
 | [03 — Mailing & trames mail](./03-mailing.md) | Connexion Gmail, trames, signature, envoi depuis une fiche, envoi de CV aux entreprises |
 | [04 — Besoins](./04-besoins.md) | Créer un besoin, cursus, pipeline, archivage (avec protection du gel), suppression |
+| [05 — Utilisateurs, invitations & rôles](./05-utilisateurs-roles.md) | Inviter, rôles, activer/désactiver/réactiver, prévisualisation (admin) |
 
 > Ces guides décrivent le comportement **après** les corrections de sécurité et
 > de robustesse. En cas de doute sur un droit ou un effet, référez-vous à la
