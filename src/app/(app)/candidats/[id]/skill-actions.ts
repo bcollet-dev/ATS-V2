@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { candidateSkills } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, checkPreviewGuard } from "@/lib/auth";
 import { can, type AppRole } from "@/lib/permissions";
 
 export async function addSkill(
@@ -13,6 +13,8 @@ export async function addSkill(
 ): Promise<{ success: boolean; data?: { id: string; name: string }; error?: string }> {
   const user = await getCurrentUser();
   if (!user) return { success: false, error: "Non authentifié" };
+  const guard = await checkPreviewGuard();
+  if (guard) return guard;
   if (!can(user.role as AppRole, "candidates:edit")) return { success: false, error: "Non autorisé" };
 
   const trimmed = name.trim();
@@ -33,6 +35,8 @@ export async function deleteSkill(
 ): Promise<{ success: boolean; error?: string }> {
   const user = await getCurrentUser();
   if (!user) return { success: false, error: "Non authentifié" };
+  const guard = await checkPreviewGuard();
+  if (guard) return guard;
   if (!can(user.role as AppRole, "candidates:edit")) return { success: false, error: "Non autorisé" };
 
   await db.delete(candidateSkills).where(eq(candidateSkills.id, id));

@@ -1,6 +1,6 @@
 "use server";
 
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, requireMutator } from "@/lib/auth";
 import { can, type AppRole } from "@/lib/permissions";
 import { db } from "@/db";
 import { matchings, candidates, needs, companies, classes, cursus, needCursus, appSettings, documents, profiles, companyContacts, mailTemplates, activityEvents } from "@/db/schema";
@@ -393,7 +393,7 @@ type CreateResult =
   | { success: false; error: string };
 
 export async function createMatching(candidateId: string, needId: string): Promise<CreateResult> {
-  const actor = await requireAuth();
+  const actor = await requireMutator();
   if (!can(actor.role as AppRole, "matchings:create")) return { success: false, error: "Non autorisé" };
   const existing = await db
     .select({ id: matchings.id })
@@ -440,7 +440,7 @@ export async function updateMatchingStatus(
   status: string,
   refusalReason?: string
 ): Promise<void> {
-  const actor = await requireAuth();
+  const actor = await requireMutator();
   if (!can(actor.role as AppRole, "matchings:editStatus")) {
     throw new Error("Vous n'avez pas les droits pour modifier un statut de proposition");
   }
@@ -532,7 +532,7 @@ export async function updateMatchingStatus(
 }
 
 export async function markMatchingWinner(matchingId: string): Promise<void> {
-  const actor = await requireAuth();
+  const actor = await requireMutator();
   if (!can(actor.role as AppRole, "matchings:editStatus")) {
     throw new Error("Vous n'avez pas les droits pour sélectionner un gagnant");
   }
@@ -590,7 +590,7 @@ export async function markMatchingWinner(matchingId: string): Promise<void> {
 }
 
 export async function deleteMatching(id: string): Promise<void> {
-  const actor = await requireAuth();
+  const actor = await requireMutator();
   if (!can(actor.role as AppRole, "matchings:editStatus")) {
     throw new Error("Vous n'avez pas les droits pour retirer une proposition");
   }
@@ -632,7 +632,7 @@ export async function deleteMatching(id: string): Promise<void> {
 
 // Revalidate need-specific path
 export async function deleteAllMatchingsForNeed(needId: string): Promise<void> {
-  const actor = await requireAuth();
+  const actor = await requireMutator();
   if (!can(actor.role as AppRole, "needs:edit")) {
     throw new Error("Vous n'avez pas les droits pour retirer les propositions de ce besoin");
   }
@@ -652,7 +652,7 @@ export async function deleteAllMatchingsForNeed(needId: string): Promise<void> {
 }
 
 export async function deleteAllMatchingsForCandidate(candidateId: string): Promise<void> {
-  const actor = await requireAuth();
+  const actor = await requireMutator();
   if (!can(actor.role as AppRole, "candidates:edit")) {
     throw new Error("Vous n'avez pas les droits pour retirer les propositions de ce candidat");
   }
@@ -686,7 +686,7 @@ export async function revalidateCandidat(candidateId: string): Promise<void> {
 export async function batchCreateMatchings(
   pairs: { candidateId: string; needId: string }[]
 ): Promise<{ created: number; skipped: number }> {
-  await requireAuth();
+  await requireMutator();
   if (pairs.length === 0) return { created: 0, skipped: 0 };
 
   const candidateIds = [...new Set(pairs.map((p) => p.candidateId))];
@@ -980,7 +980,7 @@ export async function sendMatchingEmails(params: {
     candidateIds: string[];
   }[];
 }): Promise<{ results: { needId: string; success: boolean; error?: string }[]; notifyFailures?: number }> {
-  const user = await requireAuth();
+  const user = await requireMutator();
 
   // ML2 — l'envoi de CV aux entreprises est réservé aux rôles habilités.
   if (!can(user.role as AppRole, "matchings:editStatus")) {
@@ -1332,7 +1332,7 @@ export async function saveMailTemplate(
   subject: string,
   body: string
 ): Promise<{ success: true; id: string } | { success: false; error: string }> {
-  const actor = await requireAuth();
+  const actor = await requireMutator();
   try {
     const [created] = await db
       .insert(mailTemplates)

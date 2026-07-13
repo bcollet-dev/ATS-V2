@@ -1,6 +1,6 @@
 "use server";
 
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, requireMutator } from "@/lib/auth";
 import { can, type AppRole } from "@/lib/permissions";
 import { db } from "@/db";
 import { candidates, profiles, tasks, taskLinks, matchings, needs } from "@/db/schema";
@@ -122,7 +122,7 @@ export async function loadPipelineCandidates(): Promise<CandidatRow[]> {
 }
 
 export async function updateCandidatCursus(id: string, cursusEnvisage: string) {
-  await requireAuth();
+  await requireMutator();
   await db
     .update(candidates)
     .set({ cursusEnvisage: cursusEnvisage || null, updatedAt: new Date() })
@@ -131,7 +131,7 @@ export async function updateCandidatCursus(id: string, cursusEnvisage: string) {
 }
 
 export async function updateCandidatOwner(id: string, ownerId: string | null) {
-  await requireAuth();
+  await requireMutator();
   await db
     .update(candidates)
     .set({ ownerId: ownerId || null, updatedAt: new Date() })
@@ -150,7 +150,7 @@ const PRE_MATCHING_STATUSES = new Set([
 ]);
 
 export async function updateCandidateStatus(id: string, status: string, lostReason?: string) {
-  const user = await requireAuth();
+  const user = await requireMutator();
   const role = user.role as AppRole;
   const allowed = PRE_MATCHING_STATUSES.has(status)
     ? can(role, "candidates:edit")

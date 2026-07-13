@@ -1,6 +1,6 @@
 "use server";
 
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, checkPreviewGuard } from "@/lib/auth";
 import { db } from "@/db";
 import { documents, activityEvents, companies } from "@/db/schema";
 import { eq, and, asc, isNull } from "drizzle-orm";
@@ -57,6 +57,8 @@ export async function uploadCompanyDocument(
   formData: FormData
 ): Promise<{ success: true; document: CompanyDocument } | { success: false; error: string }> {
   const actor = await requireAuth();
+  const previewGuard = await checkPreviewGuard();
+  if (previewGuard) return previewGuard;
 
   const file = formData.get("file") as File | null;
   if (!file || file.size === 0) return { success: false, error: "Aucun fichier sélectionné" };

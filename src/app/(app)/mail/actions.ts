@@ -2,7 +2,7 @@
 
 import { db } from "@/db";
 import { candidates, companies, companyContacts, documents, mailTemplates, needs } from "@/db/schema";
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, requireMutator } from "@/lib/auth";
 import { getGmailAccessToken, sendGmailMessage } from "@/lib/gmail-api";
 import { logActivityEvent } from "@/lib/activity";
 import { substituteVariables, stripHtml, type MailVariableContext } from "@/lib/mail-variables";
@@ -567,7 +567,7 @@ export async function uploadEntityMailAttachment(
   entityId: string,
   formData: FormData
 ): Promise<{ success: true; document: EntityMailDocument } | { success: false; error: string }> {
-  const actor = await requireAuth();
+  const actor = await requireMutator();
 
   const file = formData.get("file") as File | null;
   if (!file || file.size === 0) return { success: false, error: "Aucun fichier sélectionné" };
@@ -624,7 +624,7 @@ export async function uploadEntityMailAttachment(
 export async function sendEntityMail(
   input: SendEntityMailInput
 ): Promise<{ success: true } | { success: false; error: string }> {
-  const user = await requireAuth();
+  const user = await requireMutator();
 
   const to = cleanEmail(input.to);
   if (!to) return { success: false, error: "Destinataire manquant." };

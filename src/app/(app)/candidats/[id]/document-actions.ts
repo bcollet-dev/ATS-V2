@@ -1,6 +1,6 @@
 "use server";
 
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, checkPreviewGuard } from "@/lib/auth";
 import { db } from "@/db";
 import {
   documents,
@@ -222,6 +222,8 @@ export async function uploadCandidateDocument(
   | { success: false; error: string }
 > {
   const actor = await requireAuth();
+  const previewGuard = await checkPreviewGuard();
+  if (previewGuard) return previewGuard;
 
   const file = formData.get("file") as File | null;
   if (!file || file.size === 0) return { success: false, error: "Aucun fichier sélectionné" };
@@ -545,6 +547,8 @@ export async function retryDocumentExtraction(
   candidateId: string
 ): Promise<{ success: boolean; extractedData?: Record<string, unknown>; error?: string }> {
   await requireAuth();
+  const previewGuard = await checkPreviewGuard();
+  if (previewGuard) return previewGuard;
   if (!isAiExtractionEnabled()) {
     return { success: false, error: "Extraction IA desactivee" };
   }
@@ -600,6 +604,8 @@ export async function deleteCandidateDocument(
   candidateId: string
 ): Promise<{ success: boolean; error?: string }> {
   await requireAuth();
+  const previewGuard = await checkPreviewGuard();
+  if (previewGuard) return previewGuard;
 
   const [row] = await db
     .select({ storagePath: documents.storagePath })
@@ -671,6 +677,8 @@ export async function applyDocumentExtraction(
   checkedKeys: string[]
 ): Promise<{ success: boolean; error?: string }> {
   const actor = await requireAuth();
+  const previewGuard = await checkPreviewGuard();
+  if (previewGuard) return previewGuard;
 
   const [doc] = await db
     .select({

@@ -98,3 +98,18 @@ export async function checkPreviewGuard(): Promise<{ success: false; error: stri
   }
   return null;
 }
+
+/**
+ * Comme requireAuth, mais destiné aux actions d'écriture : refuse d'exécuter une
+ * mutation quand une prévisualisation est active (rôle ou utilisateur). Évite
+ * qu'un admin en « voir comme » modifie des données attribuées à l'utilisateur
+ * impersoné. En usage normal (pas de cookie de preview), équivalent à requireAuth.
+ */
+export async function requireMutator(): Promise<UserProfile> {
+  const user = await requireAuth();
+  const cookieStore = await cookies();
+  if (cookieStore.get(PREVIEW_COOKIE)?.value) {
+    throw new Error("Action non disponible en mode prévisualisation");
+  }
+  return user;
+}

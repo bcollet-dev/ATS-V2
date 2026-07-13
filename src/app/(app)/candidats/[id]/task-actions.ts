@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { tasks, taskLinks, notifications, activityEvents, profiles } from "@/db/schema";
 import { eq, and, isNull, asc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, checkPreviewGuard } from "@/lib/auth";
 import { type AppRole } from "@/lib/permissions";
 
 // Peuvent gérer n'importe quelle tâche ; sinon seulement créateur ou assigné.
@@ -150,6 +150,8 @@ export async function createTask(
 ): Promise<{ success: boolean; data?: TaskRow; error?: string }> {
   const user = await getCurrentUser();
   if (!user) return { success: false, error: "Non authentifie" };
+  const guard = await checkPreviewGuard();
+  if (guard) return guard;
 
   const dueAt = new Date(input.dueAt + "T12:00:00Z");
   const link: TaskLinkInput = { entityType: "candidate", entityId: candidateId };
@@ -222,6 +224,8 @@ export async function updateTask(
 ): Promise<{ success: boolean; data?: TaskRow; error?: string }> {
   const user = await getCurrentUser();
   if (!user) return { success: false, error: "Non authentifie" };
+  const guard = await checkPreviewGuard();
+  if (guard) return guard;
 
   const ownership = await loadTaskOwnership(taskId);
   if (!ownership) return { success: false, error: "Tâche introuvable" };
@@ -285,6 +289,8 @@ export async function toggleTask(
 ): Promise<{ success: boolean; data?: Pick<TaskRow, "completedAt">; error?: string }> {
   const user = await getCurrentUser();
   if (!user) return { success: false, error: "Non authentifie" };
+  const guard = await checkPreviewGuard();
+  if (guard) return guard;
 
   const ownership = await loadTaskOwnership(taskId);
   if (!ownership) return { success: false, error: "Tâche introuvable" };
@@ -324,6 +330,8 @@ export async function deleteTask(
 ): Promise<{ success: boolean; error?: string }> {
   const user = await getCurrentUser();
   if (!user) return { success: false, error: "Non authentifie" };
+  const guard = await checkPreviewGuard();
+  if (guard) return guard;
 
   const ownership = await loadTaskOwnership(taskId);
   if (!ownership) return { success: false, error: "Tâche introuvable" };
