@@ -15,6 +15,7 @@ const GUIDE_FILES = [
   "05-utilisateurs-roles.md",
   "06-rgpd.md",
   "07-fre-cerfa.md",
+  "08-catalogue-ypareo.md",
 ];
 
 export default async function GuidePage() {

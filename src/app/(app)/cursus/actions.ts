@@ -2,10 +2,12 @@
 
 import { db } from "@/db";
 import { cursus, classes } from "@/db/schema";
-import { eq, isNull, isNotNull, asc, inArray } from "drizzle-orm";
+import { eq, and, lt, isNull, isNotNull, asc, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, checkPreviewGuard } from "@/lib/auth";
+import { can, type AppRole } from "@/lib/permissions";
 import { fetchYpareoCatalog } from "@/lib/ypareo/client";
+import { isClassPlaceable, schoolYearShortLabelOf } from "@/lib/ypareo/class-window";
 import { createCursusSchema, type CreateCursusInput } from "./schemas";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -28,6 +30,8 @@ export type ClassRow = {
   endDate: string | null;
   active: boolean;
   slackWebhookUrl: string | null;
+  schoolYear: string | null;   // ex. "26-27", dérivé de startDate
+  terminated: boolean;         // promo terminée = non plaçable (startDate + 3 mois + 1 j)
 };
 
 export type SyncedCursusRow = {
@@ -104,6 +108,8 @@ export async function getSyncedCursusWithClasses(): Promise<SyncedCursusRow[]> {
       endDate: cls.endDate,
       active: cls.active,
       slackWebhookUrl: cls.slackWebhookUrl,
+      schoolYear: schoolYearShortLabelOf(cls.startDate),
+      terminated: !isClassPlaceable(cls.startDate),
     });
     classesMap.set(cls.cursusId, list);
   }
@@ -137,8 +143,15 @@ export async function syncYpareoCatalog(): Promise<{
   classesCount?: number;
   syncedAt?: string;
   syncedCursus?: SyncedCursusRow[];
+  failed?: number;
 }> {
-  await requireAuth();
+  // Y2 — réserver la resynchronisation du référentiel aux rôles habilités.
+  const actor = await requireAuth();
+  if (!can(actor.role as AppRole, "catalog:sync")) {
+    return { success: false, error: "Vous n'avez pas les droits pour synchroniser le catalogue" };
+  }
+  const guard = await checkPreviewGuard();
+  if (guard) return { success: false, error: guard.error };
 
   let catalog;
   try {
@@ -149,32 +162,38 @@ export async function syncYpareoCatalog(): Promise<{
 
   const { cursus: ypCursus, classes: ypClasses } = catalog;
   const now = new Date();
+  let failed = 0;
 
-  // Upsert cursus
+  // Upsert cursus (Y3 : un item malformé n'interrompt pas tout le sync)
   for (const yc of ypCursus) {
-    await db
-      .insert(cursus)
-      .values({
-        externalId: yc.externalId,
-        code: yc.code,
-        name: yc.name,
-        description: yc.description,
-        active: yc.active,
-        rawData: yc.raw,
-        syncedAt: now,
-      })
-      .onConflictDoUpdate({
-        target: cursus.externalId,
-        set: {
+    try {
+      await db
+        .insert(cursus)
+        .values({
+          externalId: yc.externalId,
           code: yc.code,
           name: yc.name,
           description: yc.description,
           active: yc.active,
           rawData: yc.raw,
           syncedAt: now,
-          updatedAt: now,
-        },
-      });
+        })
+        .onConflictDoUpdate({
+          target: cursus.externalId,
+          set: {
+            code: yc.code,
+            name: yc.name,
+            description: yc.description,
+            active: yc.active,
+            rawData: yc.raw,
+            syncedAt: now,
+            updatedAt: now,
+          },
+        });
+    } catch (err) {
+      failed++;
+      console.error(`[catalog-sync] échec cursus ${yc.externalId}:`, err);
+    }
   }
 
   // Build externalId → DB id map
@@ -188,26 +207,17 @@ export async function syncYpareoCatalog(): Promise<{
   let classesCount = 0;
   for (const yc of ypClasses) {
     const cursusId = cursusMap.get(yc.productExternalId);
-    if (!cursusId) continue;
+    if (!cursusId) {
+      console.warn(`[catalog-sync] classe ${yc.externalId} ignorée : cursus ${yc.productExternalId} absent du catalogue`);
+      continue;
+    }
 
-    await db
-      .insert(classes)
-      .values({
-        cursusId,
-        externalId: yc.externalId,
-        code: yc.code,
-        name: yc.name,
-        site: yc.site,
-        startDate: yc.startDate,
-        endDate: yc.endDate,
-        active: yc.active,
-        rawData: yc.raw,
-        syncedAt: now,
-      })
-      .onConflictDoUpdate({
-        target: classes.externalId,
-        set: {
+    try {
+      await db
+        .insert(classes)
+        .values({
           cursusId,
+          externalId: yc.externalId,
           code: yc.code,
           name: yc.name,
           site: yc.site,
@@ -216,10 +226,43 @@ export async function syncYpareoCatalog(): Promise<{
           active: yc.active,
           rawData: yc.raw,
           syncedAt: now,
-          updatedAt: now,
-        },
-      });
-    classesCount++;
+        })
+        .onConflictDoUpdate({
+          target: classes.externalId,
+          set: {
+            cursusId,
+            code: yc.code,
+            name: yc.name,
+            site: yc.site,
+            startDate: yc.startDate,
+            endDate: yc.endDate,
+            active: yc.active,
+            rawData: yc.raw,
+            syncedAt: now,
+            updatedAt: now,
+          },
+        });
+      classesCount++;
+    } catch (err) {
+      failed++;
+      console.error(`[catalog-sync] échec classe ${yc.externalId}:`, err);
+    }
+  }
+
+  // Y1 — « ghost classes » : désactiver les enregistrements d'origine Ypareo
+  // (externalId non nul) NON revus lors de ce sync (syncedAt < now), qui ont donc
+  // disparu du flux Ypareo. Garde-fou anti-« wipe » : uniquement si le flux n'est
+  // pas vide (évite une désactivation massive sur un hoquet d'API). Les cursus/
+  // classes créés manuellement (externalId nul) ne sont jamais touchés.
+  if (ypCursus.length > 0) {
+    await db.update(cursus)
+      .set({ active: false, updatedAt: now })
+      .where(and(isNotNull(cursus.externalId), eq(cursus.active, true), lt(cursus.syncedAt, now)));
+  }
+  if (ypClasses.length > 0) {
+    await db.update(classes)
+      .set({ active: false, updatedAt: now })
+      .where(and(isNotNull(classes.externalId), eq(classes.active, true), lt(classes.syncedAt, now)));
   }
 
   revalidatePath("/cursus");
@@ -229,6 +272,7 @@ export async function syncYpareoCatalog(): Promise<{
     classesCount,
     syncedAt: now.toISOString(),
     syncedCursus: await getSyncedCursusWithClasses(),
+    failed,
   };
 }
 

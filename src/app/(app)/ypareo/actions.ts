@@ -14,6 +14,7 @@ import {
   ypareoLogs,
 } from "@/db/schema";
 import { requireAuth, requireMutator } from "@/lib/auth";
+import { isClassPlaceable } from "@/lib/ypareo/class-window";
 import { resolveFrenchBirthDepartment } from "@/lib/birth-department";
 import { decryptNir } from "@/lib/nir";
 import {
@@ -1133,15 +1134,18 @@ export async function loadYpareoPlacementDraft(
     title: candidate ? fullName(candidate.firstName, candidate.lastName) ?? "Placement Ypareo" : "Placement Ypareo",
     subtitle: need ? `${need.title} - ${need.companyName}` : "Dossier incomplet",
     sections,
-    classOptions: classRows.map((row) => ({
-      id: row.id,
-      externalId: row.externalId ?? null,
-      name: row.name,
-      code: row.code ?? null,
-      site: row.site ?? null,
-      startDate: clean(row.startDate),
-      endDate: clean(row.endDate),
-    })),
+    // On ne propose que les promos encore plaçables (≤ startDate + 3 mois + 1 j).
+    classOptions: classRows
+      .filter((row) => isClassPlaceable(row.startDate))
+      .map((row) => ({
+        id: row.id,
+        externalId: row.externalId ?? null,
+        name: row.name,
+        code: row.code ?? null,
+        site: row.site ?? null,
+        startDate: clean(row.startDate),
+        endDate: clean(row.endDate),
+      })),
     missingFields,
     blockingIssues,
     warnings,
@@ -1284,6 +1288,15 @@ export async function pushYpareoPlacement(
       .where(eq(classes.id, selectedClassId))
       .limit(1);
     selectedClass = cls ?? null;
+  }
+
+  // Garde métier : impossible de placer sur une promo terminée
+  // (non plaçable dès startDate + 3 mois + 1 jour).
+  if (selectedClass && !isClassPlaceable(selectedClass.startDate)) {
+    return {
+      success: false,
+      error: "Cette promo est terminée (placement possible uniquement jusqu'à 3 mois et 1 jour après le début). Sélectionnez une classe en cours.",
+    };
   }
 
   if (!selectedClass?.externalId) {

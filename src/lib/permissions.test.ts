@@ -24,6 +24,7 @@ const MATRIX: Record<Permission, AppRole[]> = {
   "interviewTrames:manage": ["admin", "direction"],
   "dashboard:global":     ["admin", "direction", "team_leader"],
   "fre:manage":           ["admin", "direction", "admissions", "relations_entreprises"],
+  "catalog:sync":         ["admin", "direction"],
   "system:access":        ["admin"],
 };
 
