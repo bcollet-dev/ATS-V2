@@ -1,6 +1,7 @@
 "use server";
 
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, checkPreviewGuard } from "@/lib/auth";
+import { can, type AppRole } from "@/lib/permissions";
 import { db } from "@/db";
 import {
   needs,
@@ -38,7 +39,9 @@ function isAiExtractionEnabled(): boolean {
 // ─── Loaders ──────────────────────────────────────────────────────────────────
 
 export async function loadNeedFreDocuments(needId: string): Promise<FreDocument[]> {
-  await requireAuth();
+  const actor = await requireAuth();
+  // F1 — le FRE/CERFA contient le NIR en clair : accès réservé aux rôles habilités.
+  if (!can(actor.role as AppRole, "fre:manage")) return [];
   const rows = await db
     .select({
       id: documents.id,
@@ -60,7 +63,8 @@ export async function loadNeedFreDocuments(needId: string): Promise<FreDocument[
 }
 
 export async function getSignedFreUrl(documentId: string): Promise<string | null> {
-  await requireAuth();
+  const actor = await requireAuth();
+  if (!can(actor.role as AppRole, "fre:manage")) return null;
   const [row] = await db
     .select({ storagePath: documents.storagePath })
     .from(documents)
@@ -336,6 +340,11 @@ export async function generateFre(
   options: GenerateFreOptions = {}
 ): Promise<GenerateFreResult> {
   const actor = await requireAuth();
+  if (!can(actor.role as AppRole, "fre:manage")) {
+    return { success: false, error: "Vous n'avez pas les droits pour générer un FRE" };
+  }
+  const previewGuard = await checkPreviewGuard();
+  if (previewGuard) return previewGuard;
 
   const [need] = await db
     .select({
@@ -423,7 +432,9 @@ export async function generateFre(
     try {
       const { decryptNir } = await import("@/lib/nir");
       nir = formatNir(decryptNir(candidate.nirEncrypted, candidate.nirIv));
-    } catch {
+    } catch (err) {
+      // F4 — ne pas masquer un NIR indéchiffrable : le CERFA serait généré sans NIR.
+      console.error("[fre] NIR indéchiffrable — FRE générée sans NIR:", err);
       nir = "";
     }
   }
@@ -665,6 +676,11 @@ export async function importFre(
   | { success: false; error: string }
 > {
   const actor = await requireAuth();
+  if (!can(actor.role as AppRole, "fre:manage")) {
+    return { success: false, error: "Vous n'avez pas les droits pour importer un FRE" };
+  }
+  const previewGuard = await checkPreviewGuard();
+  if (previewGuard) return previewGuard;
 
   const file = formData.get("file") as File | null;
   if (!file || file.size === 0) return { success: false, error: "Aucun fichier sélectionné" };
@@ -891,6 +907,11 @@ export async function applyFreExtraction(
   confirmedFields: Record<string, string>
 ): Promise<{ success: boolean; error?: string }> {
   const actor = await requireAuth();
+  if (!can(actor.role as AppRole, "fre:manage")) {
+    return { success: false, error: "Vous n'avez pas les droits pour appliquer l'extraction FRE" };
+  }
+  const previewGuard = await checkPreviewGuard();
+  if (previewGuard) return previewGuard;
 
   const needUpdate: Record<string, unknown> = {};
   for (const field of needFreFields) {

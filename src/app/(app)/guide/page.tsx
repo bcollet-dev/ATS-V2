@@ -14,6 +14,7 @@ const GUIDE_FILES = [
   "04-besoins.md",
   "05-utilisateurs-roles.md",
   "06-rgpd.md",
+  "07-fre-cerfa.md",
 ];
 
 export default async function GuidePage() {
