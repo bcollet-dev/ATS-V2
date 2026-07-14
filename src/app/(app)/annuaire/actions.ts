@@ -3,6 +3,7 @@
 import { db } from "@/db";
 import { candidates, companies, companyContacts } from "@/db/schema";
 import { ilike, or, isNull, and, eq } from "drizzle-orm";
+import { requireAuth } from "@/lib/auth";
 
 export type FilterType = "candidat" | "contact" | "entreprise";
 
@@ -42,6 +43,7 @@ export async function searchAnnuaire(
   query: string,
   types: FilterType[]
 ): Promise<SearchResult[]> {
+  await requireAuth();
   if (types.length === 0) return [];
 
   const trimmed = query.trim();

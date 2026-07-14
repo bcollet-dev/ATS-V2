@@ -1,5 +1,7 @@
 "use server";
 
+import { requireAuth } from "@/lib/auth";
+
 export type RegistryData = {
   name: string;
   siren: string;
@@ -17,6 +19,7 @@ export type SiretLookupResult =
   | { found: false };
 
 export async function lookupSiret(siret: string): Promise<SiretLookupResult> {
+  await requireAuth();
   try {
     const res = await fetch(
       `https://recherche-entreprises.api.gouv.fr/search?q=${encodeURIComponent(siret)}&per_page=1`,
