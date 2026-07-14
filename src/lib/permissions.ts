@@ -19,6 +19,7 @@ export type Permission =
   | "interviewTrames:manage"
   | "dashboard:global"
   | "fre:manage"
+  | "catalog:sync"
   | "system:access";
 
 const PERMISSIONS: Record<Permission, ReadonlySet<AppRole>> = {
@@ -35,6 +36,7 @@ const PERMISSIONS: Record<Permission, ReadonlySet<AppRole>> = {
   "interviewTrames:manage": new Set(["admin", "direction"]),
   "dashboard:global":     new Set(["admin", "direction", "team_leader"]),
   "fre:manage":           new Set(["admin", "direction", "admissions", "relations_entreprises"]),
+  "catalog:sync":         new Set(["admin", "direction"]),
   "system:access":        new Set(["admin"]),
 };
 

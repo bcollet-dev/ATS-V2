@@ -115,13 +115,17 @@ function SyncedCursusCard({
   c,
   onRequestDelete,
   isDeleting,
+  hideTerminated,
 }: {
   c: SyncedCursusRow;
   onRequestDelete: (target: DeleteTarget) => void;
   isDeleting: boolean;
+  hideTerminated: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const activeClasses = c.classes.filter((cl) => cl.active);
+  // Promos plaçables (actives et non terminées) pour le compteur.
+  const activeClasses = c.classes.filter((cl) => cl.active && !cl.terminated);
+  const visibleClasses = hideTerminated ? c.classes.filter((cl) => !cl.terminated) : c.classes;
 
   return (
     <div className={cn("rounded-lg border bg-card", !c.active && "opacity-60")}>
@@ -167,10 +171,12 @@ function SyncedCursusCard({
 
       {expanded && (
         <div className="border-t divide-y">
-          {c.classes.length === 0 ? (
-            <p className="px-8 py-3 text-xs text-muted-foreground italic">Aucune action de formation</p>
+          {visibleClasses.length === 0 ? (
+            <p className="px-8 py-3 text-xs text-muted-foreground italic">
+              {c.classes.length === 0 ? "Aucune action de formation" : "Aucune promo en cours (promos terminées masquées)"}
+            </p>
           ) : (
-            c.classes.map((cl) => (
+            visibleClasses.map((cl) => (
               <div
                 key={cl.id}
                 className={cn(
@@ -183,6 +189,16 @@ function SyncedCursusCard({
                     <span className="font-medium">{cl.name}</span>
                     {cl.code && <span className="ml-1.5 text-muted-foreground">{cl.code}</span>}
                     {cl.site && <span className="ml-1.5 text-muted-foreground">· {cl.site}</span>}
+                    {cl.schoolYear && (
+                      <Badge className="ml-1.5 text-[10px] bg-muted text-muted-foreground border-0 px-1 py-0">
+                        {cl.schoolYear}
+                      </Badge>
+                    )}
+                    {cl.terminated && (
+                      <Badge className="ml-1.5 text-[10px] bg-amber-100 text-amber-700 border-0 px-1 py-0">
+                        Terminée
+                      </Badge>
+                    )}
                   </span>
                   {cl.startDate && (
                     <span className="text-muted-foreground shrink-0">
@@ -296,6 +312,7 @@ export function CursusPageClient({
   const [isDeleting, startDelete] = useTransition();
   const [manualCursus, setManualCursus] = useState(initialCursus);
   const [syncedCursus, setSyncedCursus] = useState(initialSyncedCursus);
+  const [hideTerminated, setHideTerminated] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [lastSync, setLastSync] = useState<{ at: string; cursusCount: number; classesCount: number } | null>(
     initialSyncedCursus.length > 0
@@ -354,6 +371,9 @@ export function CursusPageClient({
       setLastSync({ at: result.syncedAt!, cursusCount: result.cursusCount!, classesCount: result.classesCount! });
       setSyncedCursus(result.syncedCursus ?? []);
       toast.success(`Synchronisation réussie — ${result.cursusCount} cursus, ${result.classesCount} actions de formation`);
+      if (result.failed && result.failed > 0) {
+        toast.warning(`${result.failed} élément(s) en échec (voir les logs).`);
+      }
     });
   }
 
@@ -404,12 +424,22 @@ export function CursusPageClient({
             </div>
           ) : (
             <div className="space-y-2">
+              <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none w-fit">
+                <input
+                  type="checkbox"
+                  checked={hideTerminated}
+                  onChange={(e) => setHideTerminated(e.target.checked)}
+                  className="h-3.5 w-3.5 rounded border-input"
+                />
+                Masquer les promos terminées (non plaçables)
+              </label>
               {syncedCursus.map((c) => (
                 <SyncedCursusCard
                   key={c.id}
                   c={c}
                   onRequestDelete={setDeleteTarget}
                   isDeleting={isDeleting && deleteTarget?.id === c.id}
+                  hideTerminated={hideTerminated}
                 />
               ))}
               {isSyncing && (
