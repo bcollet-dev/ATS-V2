@@ -235,6 +235,8 @@ export async function updateCompanyInfo(
 ): Promise<{ success: boolean; error?: string }> {
   const actor = await requireAuth();
   if (!can(actor.role as AppRole, "companies:edit")) return { success: false, error: "Non autorisé" };
+  const previewGuard = await checkPreviewGuard();
+  if (previewGuard) return previewGuard;
   await db.update(companies).set({ ...data, updatedAt: new Date() }).where(eq(companies.id, id));
   await db.insert(activityEvents).values({
     actorId: actor.id,
@@ -261,6 +263,8 @@ export async function updateCompanyFRE(
 ): Promise<{ success: boolean; error?: string }> {
   const actor = await requireAuth();
   if (!can(actor.role as AppRole, "companies:edit")) return { success: false, error: "Non autorisé" };
+  const previewGuard = await checkPreviewGuard();
+  if (previewGuard) return previewGuard;
   await db.update(companies).set({ ...data, updatedAt: new Date() }).where(eq(companies.id, id));
   await db.insert(activityEvents).values({
     actorId: actor.id,
@@ -278,6 +282,8 @@ export async function updateCompanyOwner(
 ): Promise<{ success: boolean; error?: string }> {
   const actor = await requireAuth();
   if (!can(actor.role as AppRole, "companies:edit")) return { success: false, error: "Non autorisé" };
+  const previewGuard = await checkPreviewGuard();
+  if (previewGuard) return previewGuard;
   await db
     .update(companies)
     .set({ ownerId: ownerId || null, updatedAt: new Date() })
@@ -297,6 +303,8 @@ export async function syncFromPappers(
 ): Promise<{ success: boolean; error?: string }> {
   const actor = await requireAuth();
   if (!can(actor.role as AppRole, "companies:edit")) return { success: false, error: "Non autorisé" };
+  const previewGuard = await checkPreviewGuard();
+  if (previewGuard) return previewGuard;
 
   const [row] = await db
     .select({ siret: companies.siret })
@@ -370,6 +378,8 @@ export async function addContact(
 ): Promise<{ success: true; id: string } | { success: false; error: string }> {
   const actor = await requireAuth();
   if (!can(actor.role as AppRole, "companies:edit")) return { success: false, error: "Non autorisé" };
+  const previewGuard = await checkPreviewGuard();
+  if (previewGuard) return previewGuard;
 
   if (data.isPrimary) {
     await db
@@ -410,6 +420,8 @@ export async function updateContact(
 ): Promise<{ success: boolean; error?: string }> {
   const actor = await requireAuth();
   if (!can(actor.role as AppRole, "companies:edit")) return { success: false, error: "Non autorisé" };
+  const previewGuard = await checkPreviewGuard();
+  if (previewGuard) return previewGuard;
 
   if (data.isPrimary) {
     await db
@@ -445,6 +457,8 @@ export async function updateContact(
 export async function deleteContact(contactId: string, companyId: string): Promise<void> {
   const actor = await requireAuth();
   if (!can(actor.role as AppRole, "companies:edit")) return;
+  const previewGuard = await checkPreviewGuard();
+  if (previewGuard) return;
 
   const [contact] = await db
     .select({ firstName: companyContacts.firstName, lastName: companyContacts.lastName })
