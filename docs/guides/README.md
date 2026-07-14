@@ -15,6 +15,7 @@ entraîne** (effets de bord, statuts, notifications).
 | [06 — RGPD : rétention & purge](./06-rgpd.md) | Durées de rétention, purge automatique/manuelle, garanties d'effacement |
 | [07 — FRE / CERFA (contrat)](./07-fre-cerfa.md) | Générer/importer le CERFA, accès restreint (NIR), complétude à l'envoi Ypareo |
 | [08 — Catalogue Ypareo & promos](./08-catalogue-ypareo.md) | Synchro catalogue, promos terminées non plaçables (3 mois + 1 j), année scolaire |
+| [09 — Dashboard & widgets](./09-dashboard.md) | Widgets, portée Ma vue / Vue équipe (contrôlée serveur), filtre année scolaire |
 
 > Ces guides décrivent le comportement **après** les corrections de sécurité et
 > de robustesse. En cas de doute sur un droit ou un effet, référez-vous à la

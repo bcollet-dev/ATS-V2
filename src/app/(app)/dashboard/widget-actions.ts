@@ -1,6 +1,7 @@
 "use server";
 
 import { requireAuth } from "@/lib/auth";
+import { can, type AppRole } from "@/lib/permissions";
 import { db } from "@/db";
 import {
   candidates, needs, tasks, taskLinks, activityEvents, matchings, classes, cursus,
@@ -10,6 +11,17 @@ import { eq, and, isNull, isNotNull, lt, inArray, gte, lte, desc, asc, count, ma
 import { alias } from "drizzle-orm/pg-core";
 import { currentSchoolYear, schoolYearFromStart } from "@/lib/dashboard/school-year";
 import type { DashboardScope } from "./DashboardClient";
+
+/**
+ * Applique côté serveur la portée demandée : seuls les rôles ayant
+ * `dashboard:global` (admin, direction, team_leader) peuvent voir la vue
+ * « équipe » (globale). Les autres (admissions, relations entreprises) sont
+ * ramenés à leur vue personnelle — l'UI le force déjà, mais l'action serveur
+ * doit l'imposer aussi (sinon fuite de données à l'échelle de l'organisation).
+ */
+function enforceScope(role: string, scope: DashboardScope): DashboardScope {
+  return scope === "global" && can(role as AppRole, "dashboard:global") ? "global" : "personal";
+}
 
 // ─── Relances ─────────────────────────────────────────────────────────────────
 
@@ -39,6 +51,7 @@ export async function getRelancesData(scope: DashboardScope): Promise<{
   inactiveCandidates: InactiveCandidate[];
 }> {
   const actor = await requireAuth();
+  scope = enforceScope(actor.role, scope);
   const now = new Date();
 
   const assigneeProfile = alias(profiles, "assignee");
@@ -157,6 +170,7 @@ export async function getStatutsBesoinsData(scope: DashboardScope): Promise<{
   funnel: { status: string; label: string; count: number }[];
 }> {
   const actor = await requireAuth();
+  scope = enforceScope(actor.role, scope);
 
   const rows = await db
     .select({ status: needs.status, cnt: count() })
@@ -189,6 +203,7 @@ export async function getBesoinsPerduData(scope: DashboardScope, startYear?: num
   schoolYear: string;
 }> {
   const actor = await requireAuth();
+  scope = enforceScope(actor.role, scope);
   const sy = startYear != null ? schoolYearFromStart(startYear) : currentSchoolYear();
 
   const baseWhere = and(
@@ -233,6 +248,7 @@ export async function getTauxPlacementData(scope: DashboardScope, startYear?: nu
   schoolYear: string;
 }> {
   const actor = await requireAuth();
+  scope = enforceScope(actor.role, scope);
   const sy = startYear != null ? schoolYearFromStart(startYear) : currentSchoolYear();
 
   const candidateBase = and(
@@ -272,6 +288,7 @@ export async function getSourcesData(scope: DashboardScope, startYear?: number):
   schoolYear: string;
 }> {
   const actor = await requireAuth();
+  scope = enforceScope(actor.role, scope);
   const sy = startYear != null ? schoolYearFromStart(startYear) : currentSchoolYear();
 
   const rows = await db
@@ -303,6 +320,7 @@ export async function getPipelineCursusData(scope: DashboardScope, startYear?: n
   rows: { cursus: string; inPipeline: number; placed: number }[];
 }> {
   const actor = await requireAuth();
+  scope = enforceScope(actor.role, scope);
   const sy = startYear != null ? schoolYearFromStart(startYear) : currentSchoolYear();
 
   const [pipelineRows, placedRows] = await Promise.all([
@@ -359,6 +377,7 @@ export async function getPlacementsParClasseData(scope: DashboardScope, startYea
   hasData: boolean;
 }> {
   const actor = await requireAuth();
+  scope = enforceScope(actor.role, scope);
   const sy = startYear != null ? schoolYearFromStart(startYear) : currentSchoolYear();
 
   const ownerProfile = alias(profiles, "owner_p");
@@ -406,6 +425,7 @@ export async function getDelaiPlacementData(scope: DashboardScope, startYear?: n
   schoolYear: string;
 }> {
   const actor = await requireAuth();
+  scope = enforceScope(actor.role, scope);
   const sy = startYear != null ? schoolYearFromStart(startYear) : currentSchoolYear();
 
   const baseWhere = and(
@@ -450,6 +470,7 @@ export async function getTauxRuptureData(scope: DashboardScope, startYear?: numb
   schoolYear: string;
 }> {
   const actor = await requireAuth();
+  scope = enforceScope(actor.role, scope);
   const sy = startYear != null ? schoolYearFromStart(startYear) : currentSchoolYear();
 
   const baseWhere = and(
@@ -478,6 +499,7 @@ export async function getComparatifData(scope: DashboardScope, startYear?: numbe
   previous: { label: string; candidatesPlaced: number; candidatesTotal: number; needsFilled: number; needsTotal: number };
 }> {
   const actor = await requireAuth();
+  scope = enforceScope(actor.role, scope);
   const sy = startYear != null ? schoolYearFromStart(startYear) : currentSchoolYear();
   const syPrev = schoolYearFromStart(sy.startYear - 1);
 
@@ -523,6 +545,7 @@ export async function getActiviteConseillerData(scope: DashboardScope, startYear
   schoolYear: string;
 }> {
   const actor = await requireAuth();
+  scope = enforceScope(actor.role, scope);
   const sy = startYear != null ? schoolYearFromStart(startYear) : currentSchoolYear();
 
   const [eventRows, taskRows] = await Promise.all([
@@ -584,6 +607,7 @@ export async function getNouvellesInscriptionsData(scope: DashboardScope): Promi
   prev30: number;
 }> {
   const actor = await requireAuth();
+  scope = enforceScope(actor.role, scope);
   const now = new Date();
   const d7 = new Date(now.getTime() - 7 * 86400_000);
   const d14 = new Date(now.getTime() - 14 * 86400_000);
@@ -622,6 +646,7 @@ export async function getNouveauxBesoinsData(scope: DashboardScope): Promise<{
   prev30: number;
 }> {
   const actor = await requireAuth();
+  scope = enforceScope(actor.role, scope);
   const now = new Date();
   const d7 = new Date(now.getTime() - 7 * 86400_000);
   const d14 = new Date(now.getTime() - 14 * 86400_000);
